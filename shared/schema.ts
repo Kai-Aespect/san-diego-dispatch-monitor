@@ -1,18 +1,30 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, jsonb, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export const incidents = pgTable("incidents", {
+  id: serial("id").primaryKey(),
+  agency: text("agency").notNull(), // 'fire' or 'police'
+  incidentNo: text("incident_no").notNull().unique(), // Unique identifier from source or hash
+  callType: text("call_type").notNull(),
+  callTypeFamily: text("call_type_family"), // 'Medical', 'Fire', 'Rescue', 'Traffic', 'Other'
+  time: timestamp("time").notNull(),
+  location: text("location").notNull(),
+  crossStreets: text("cross_streets"),
+  neighborhood: text("neighborhood"),
+  status: text("status"),
+  units: jsonb("units").$type<string[]>(),
+  isMajor: boolean("is_major").default(false),
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export const insertIncidentSchema = createInsertSchema(incidents).omit({ id: true });
+export type InsertIncident = z.infer<typeof insertIncidentSchema>;
+export type Incident = typeof incidents.$inferSelect;
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type CreateIncidentRequest = InsertIncident;
+export type UpdateIncidentRequest = Partial<InsertIncident>;
+
+export type IncidentResponse = Incident;

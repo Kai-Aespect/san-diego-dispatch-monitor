@@ -1,38 +1,36 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { incidents, type Incident, type InsertIncident } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getIncidents(): Promise<Incident[]>;
+  upsertIncident(incident: InsertIncident): Promise<Incident>;
+  getIncidentByNo(incidentNo: string): Promise<Incident | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getIncidents(): Promise<Incident[]> {
+    return await db.select().from(incidents).orderBy(desc(incidents.time));
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getIncidentByNo(incidentNo: string): Promise<Incident | undefined> {
+    const [incident] = await db.select().from(incidents).where(eq(incidents.incidentNo, incidentNo));
+    return incident;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async upsertIncident(incident: InsertIncident): Promise<Incident> {
+    const existing = await this.getIncidentByNo(incident.incidentNo);
+    if (existing) {
+      const [updated] = await db.update(incidents)
+        .set({ ...incident, lastUpdated: new Date() })
+        .where(eq(incidents.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(incidents).values(incident).returning();
+      return created;
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
