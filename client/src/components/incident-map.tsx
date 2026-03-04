@@ -92,7 +92,7 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
   }, [incidents, hasValidCenter]);
 
   return (
-    <div className="w-full h-full relative rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+    <div className="w-full h-full relative rounded-xl overflow-hidden border border-white/10 shadow-2xl z-0">
       <MapContainer
         center={defaultCenter}
         zoom={11}

@@ -6,6 +6,7 @@ export interface IStorage {
   getIncidents(): Promise<Incident[]>;
   upsertIncident(incident: InsertIncident): Promise<Incident>;
   getIncidentByNo(incidentNo: string): Promise<Incident | undefined>;
+  updateIncident(id: number, updates: Partial<Incident>): Promise<Incident>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -16,6 +17,14 @@ export class DatabaseStorage implements IStorage {
   async getIncidentByNo(incidentNo: string): Promise<Incident | undefined> {
     const [incident] = await db.select().from(incidents).where(eq(incidents.incidentNo, incidentNo));
     return incident;
+  }
+
+  async updateIncident(id: number, updates: Partial<Incident>): Promise<Incident> {
+    const [updated] = await db.update(incidents)
+      .set(updates)
+      .where(eq(incidents.id, id))
+      .returning();
+    return updated;
   }
 
   async upsertIncident(incident: InsertIncident): Promise<Incident> {

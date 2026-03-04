@@ -22,6 +22,17 @@ export const api = {
       responses: {
         200: z.object({ success: z.boolean(), message: z.string(), lastUpdated: z.string() })
       }
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/incidents/:id' as const,
+      input: z.object({
+        notes: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }),
+      responses: {
+        200: z.custom<typeof incidents.$inferSelect>(),
+      }
     }
   },
   status: {

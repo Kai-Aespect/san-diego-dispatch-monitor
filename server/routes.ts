@@ -23,6 +23,17 @@ export async function registerRoutes(
     res.json(incidents);
   });
 
+  app.patch(api.incidents.update.path, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const input = api.incidents.update.input.parse(req.body);
+      const updated = await storage.updateIncident(id, input);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
   app.post(api.incidents.sync.path, async (req, res) => {
     try {
       await syncData(storage);
