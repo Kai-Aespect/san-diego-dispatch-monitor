@@ -88,24 +88,28 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
 
                 <section>
                   <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">SDFD Response Levels</h4>
-                  <div className="space-y-1 text-[11px]">
-                    <p><span className="text-primary font-bold">1a:</span> Standard medical response (1 Engine + 1 Medic)</p>
-                    <p><span className="text-primary font-bold">2a:</span> Enhanced medical (2 Engines + 1 Medic)</p>
-                    <p><span className="text-primary font-bold">3a:</span> Critical medical / Cardiac</p>
+                  <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
+                    <p><span className="text-primary font-bold w-6 inline-block">1a:</span> 1 Engine + 1 Medic (Standard)</p>
+                    <p><span className="text-primary font-bold w-6 inline-block">2a:</span> 2 Engines + 1 Medic (Enhanced)</p>
+                    <p><span className="text-primary font-bold w-6 inline-block">3a:</span> 2 Engines + 2 Medics + 1 BC (Critical/Cardiac)</p>
+                    <p><span className="text-primary font-bold w-6 inline-block">4a:</span> 3 Engines + 2 Medics + 1 BC (Major Incident)</p>
                   </div>
                 </section>
 
                 <section>
-                  <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">CA Common Codes</h4>
-                  <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
-                    <p><span className="text-primary">Code 1:</span> At your convenience</p>
-                    <p><span className="text-primary">Code 2:</span> Urgent (No lights/sirens)</p>
-                    <p><span className="text-primary">Code 3:</span> Emergency (Lights & Sirens)</p>
-                    <p><span className="text-primary">Code 4:</span> No further assistance needed</p>
-                    <p><span className="text-primary">10-4:</span> Acknowledged</p>
-                    <p><span className="text-primary">10-20:</span> Location</p>
-                    <p><span className="text-primary">10-97:</span> Arrived on scene</p>
-                    <p><span className="text-primary">10-98:</span> Assignment complete</p>
+                  <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">Common 10-Codes</h4>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono">
+                    <div><span className="text-primary">10-4</span> Acknowledged</div>
+                    <div><span className="text-primary">10-7</span> Out of Service</div>
+                    <div><span className="text-primary">10-8</span> In Service</div>
+                    <div><span className="text-primary">10-19</span> Return to Station</div>
+                    <div><span className="text-primary">10-20</span> Location</div>
+                    <div><span className="text-primary">10-21</span> Call by Phone</div>
+                    <div><span className="text-primary">10-22</span> Disregard</div>
+                    <div><span className="text-primary">10-23</span> Stand by</div>
+                    <div><span className="text-primary">10-87</span> Meet Officer</div>
+                    <div><span className="text-primary">10-97</span> Arrived on Scene</div>
+                    <div><span className="text-primary">10-98</span> Finished Assignment</div>
                   </div>
                 </section>
               </div>
