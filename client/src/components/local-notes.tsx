@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocalNotes, type LocalNote } from "@/hooks/use-local-notes";
 import { type IncidentListResponse } from "@shared/routes";
-import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Tag, Radio, Search } from "lucide-react";
+import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Radio, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,15 +13,15 @@ interface LocalNotesProps {
   incidents: IncidentListResponse;
 }
 
-const COLOR_MAP: Record<string, { bg: string; border: string; bar: string; text: string }> = {
-  blue:   { bg: "bg-blue-500/8",   border: "border-blue-500/20",   bar: "bg-blue-500",   text: "text-blue-400" },
-  purple: { bg: "bg-purple-500/8", border: "border-purple-500/20", bar: "bg-purple-500", text: "text-purple-400" },
-  green:  { bg: "bg-emerald-500/8",border: "border-emerald-500/20",bar: "bg-emerald-500",text: "text-emerald-400" },
-  amber:  { bg: "bg-amber-500/8",  border: "border-amber-500/20",  bar: "bg-amber-500",  text: "text-amber-400" },
-  red:    { bg: "bg-red-500/8",    border: "border-red-500/20",    bar: "bg-red-500",    text: "text-red-400" },
-  pink:   { bg: "bg-pink-500/8",   border: "border-pink-500/20",   bar: "bg-pink-500",   text: "text-pink-400" },
-  cyan:   { bg: "bg-cyan-500/8",   border: "border-cyan-500/20",   bar: "bg-cyan-500",   text: "text-cyan-400" },
-  indigo: { bg: "bg-indigo-500/8", border: "border-indigo-500/20", bar: "bg-indigo-500", text: "text-indigo-400" },
+const COLOR_MAP: Record<string, { bg: string; border: string; bar: string; text: string; hex: string }> = {
+  blue:   { bg: "bg-blue-500/8",    border: "border-blue-500/20",   bar: "bg-blue-500",   text: "text-blue-400",   hex: "#3b82f6" },
+  purple: { bg: "bg-purple-500/8",  border: "border-purple-500/20", bar: "bg-purple-500", text: "text-purple-400", hex: "#a855f7" },
+  green:  { bg: "bg-emerald-500/8", border: "border-emerald-500/20",bar: "bg-emerald-500",text: "text-emerald-400",hex: "#10b981" },
+  amber:  { bg: "bg-amber-500/8",   border: "border-amber-500/20",  bar: "bg-amber-500",  text: "text-amber-400",  hex: "#f59e0b" },
+  red:    { bg: "bg-red-500/8",     border: "border-red-500/20",    bar: "bg-red-500",    text: "text-red-400",    hex: "#ef4444" },
+  pink:   { bg: "bg-pink-500/8",    border: "border-pink-500/20",   bar: "bg-pink-500",   text: "text-pink-400",   hex: "#ec4899" },
+  cyan:   { bg: "bg-cyan-500/8",    border: "border-cyan-500/20",   bar: "bg-cyan-500",   text: "text-cyan-400",   hex: "#06b6d4" },
+  indigo: { bg: "bg-indigo-500/8",  border: "border-indigo-500/20", bar: "bg-indigo-500", text: "text-indigo-400", hex: "#6366f1" },
 };
 
 const ALL_COLORS = Object.keys(COLOR_MAP);
@@ -56,7 +56,6 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar */}
       <div className="px-4 pt-4 pb-3 space-y-2 border-b border-white/5">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -77,7 +76,6 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
         </p>
       </div>
 
-      {/* Notes grid */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground space-y-3">
@@ -116,6 +114,21 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
   );
 }
 
+function ColorSwatch({ color, selected, onClick }: { color: string; selected: boolean; onClick: () => void }) {
+  const hex = COLOR_MAP[color]?.hex ?? "#64748b";
+  return (
+    <button
+      onClick={onClick}
+      title={color}
+      style={{ backgroundColor: hex }}
+      className={cn(
+        "w-5 h-5 rounded-full transition-all border-2",
+        selected ? "border-white scale-125 shadow-lg" : "border-transparent opacity-70 hover:opacity-100 hover:scale-110"
+      )}
+    />
+  );
+}
+
 function NoteCard({
   note, isEditing, incidents, onEdit, onSave, onDelete, onTogglePin,
   showLinkPicker, onToggleLinkPicker, filteredCalls, callSearch, onCallSearch
@@ -148,18 +161,10 @@ function NoteCard({
       <div className={cn("rounded-xl border p-3 relative overflow-hidden", editColors.border, editColors.bg)}>
         <div className={cn("absolute left-0 top-0 bottom-0 w-1", editColors.bar)} />
         <div className="pl-2 space-y-2">
-          {/* Color picker */}
-          <div className="flex gap-1.5 mb-2">
+          <div className="flex gap-2 mb-2 items-center">
+            <span className="text-[10px] text-muted-foreground mr-1">Color:</span>
             {ALL_COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={cn(
-                  "w-4 h-4 rounded-full border-2 transition-all",
-                  `bg-${c}-500/70`,
-                  color === c ? "border-white scale-125" : "border-transparent"
-                )}
-              />
+              <ColorSwatch key={c} color={c} selected={color === c} onClick={() => setColor(c)} />
             ))}
           </div>
           <Input
@@ -175,7 +180,6 @@ function NoteCard({
             placeholder="Write your note..."
           />
 
-          {/* Link to call */}
           <button
             onClick={onToggleLinkPicker}
             className={cn(

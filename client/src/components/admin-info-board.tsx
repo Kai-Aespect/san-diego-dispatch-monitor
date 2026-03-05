@@ -41,16 +41,30 @@ function saveCards(cards: AdminCard[]) {
 }
 
 const COLOR_OPTIONS = [
-  { value: "blue", label: "Blue", cls: "bg-blue-500/20 border-blue-500/30 text-blue-400" },
-  { value: "green", label: "Green", cls: "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" },
-  { value: "amber", label: "Amber", cls: "bg-amber-500/20 border-amber-500/30 text-amber-400" },
-  { value: "red", label: "Red", cls: "bg-red-500/20 border-red-500/30 text-red-400" },
-  { value: "purple", label: "Purple", cls: "bg-purple-500/20 border-purple-500/30 text-purple-400" },
-  { value: "slate", label: "Slate", cls: "bg-slate-500/20 border-slate-500/30 text-slate-400" },
+  { value: "blue",   hex: "#3b82f6", cls: "bg-blue-500/20 border-blue-500/30 text-blue-400" },
+  { value: "green",  hex: "#10b981", cls: "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" },
+  { value: "amber",  hex: "#f59e0b", cls: "bg-amber-500/20 border-amber-500/30 text-amber-400" },
+  { value: "red",    hex: "#ef4444", cls: "bg-red-500/20 border-red-500/30 text-red-400" },
+  { value: "purple", hex: "#a855f7", cls: "bg-purple-500/20 border-purple-500/30 text-purple-400" },
+  { value: "slate",  hex: "#64748b", cls: "bg-slate-500/20 border-slate-500/30 text-slate-400" },
 ];
 
 function getColorClass(color: string) {
   return COLOR_OPTIONS.find(c => c.value === color)?.cls || COLOR_OPTIONS[0].cls;
+}
+
+function ColorSwatch({ value, hex, selected, onClick }: { value: string; hex: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={value}
+      style={{ backgroundColor: hex }}
+      className={cn(
+        "w-5 h-5 rounded-full border-2 transition-all",
+        selected ? "border-white scale-125 shadow-lg" : "border-transparent opacity-70 hover:opacity-100 hover:scale-110"
+      )}
+    />
+  );
 }
 
 export function AdminInfoBoard() {
@@ -108,7 +122,6 @@ export function AdminInfoBoard() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-muted-foreground" />
@@ -125,13 +138,12 @@ export function AdminInfoBoard() {
             </Button>
           </div>
         ) : (
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-muted-foreground" onClick={() => setIsUnlocked(!isUnlocked)}>
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-muted-foreground" onClick={() => { setIsUnlocked(!isUnlocked); }}>
             <Unlock className="w-3.5 h-3.5" /> Edit
           </Button>
         )}
       </div>
 
-      {/* PIN entry */}
       {!isUnlocked && (
         <div className="px-4 pt-3 pb-2">
           <div className="flex gap-2">
@@ -152,10 +164,9 @@ export function AdminInfoBoard() {
         </div>
       )}
 
-      {/* Add card form */}
       {isUnlocked && showAddForm && (
         <div className="mx-4 mt-3 p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
             <select
               value={newCard.type}
               onChange={(e) => setNewCard({ ...newCard, type: e.target.value as any })}
@@ -165,12 +176,15 @@ export function AdminInfoBoard() {
               <option value="link">Link</option>
               <option value="announcement">Announcement</option>
             </select>
-            <div className="flex gap-1">
+            <div className="flex gap-1.5 items-center">
+              <span className="text-[10px] text-muted-foreground">Color:</span>
               {COLOR_OPTIONS.map(c => (
-                <button
+                <ColorSwatch
                   key={c.value}
+                  value={c.value}
+                  hex={c.hex}
+                  selected={newCard.color === c.value}
                   onClick={() => setNewCard({ ...newCard, color: c.value })}
-                  className={cn("w-5 h-5 rounded-full border-2 transition-all", `bg-${c.value}-500/60`, newCard.color === c.value ? "border-white scale-110" : "border-transparent")}
                 />
               ))}
             </div>
@@ -206,7 +220,6 @@ export function AdminInfoBoard() {
         </div>
       )}
 
-      {/* Cards */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
         {sorted.map(card => (
           <AdminCardView
@@ -254,12 +267,15 @@ function AdminCardView({
   if (isEditing) {
     return (
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
-        <div className="flex gap-1 mb-1">
+        <div className="flex gap-1.5 mb-1 items-center">
+          <span className="text-[10px] text-muted-foreground mr-1">Color:</span>
           {COLOR_OPTIONS.map(c => (
-            <button
+            <ColorSwatch
               key={c.value}
+              value={c.value}
+              hex={c.hex}
+              selected={editColor === c.value}
               onClick={() => setEditColor(c.value)}
-              className={cn("w-5 h-5 rounded-full border-2 transition-all", `bg-${c.value}-500/60`, editColor === c.value ? "border-white scale-110" : "border-transparent")}
             />
           ))}
         </div>

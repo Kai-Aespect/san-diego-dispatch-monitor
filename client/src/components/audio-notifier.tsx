@@ -6,9 +6,14 @@ interface AudioNotifierProps {
   enabled: boolean;
 }
 
+// Hash meaningful content fields — NOT lastUpdated (which changes every sync)
+function contentHash(i: IncidentListResponse[0]): string {
+  return `${JSON.stringify(i.units)}|${i.callType}|${i.status}|${i.callTypeFamily}|${i.active}`;
+}
+
 export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
-  const knownIncidentIds = useRef<Set<number>>(new Set());
-  const knownUpdateTimes = useRef<Map<number, string>>(new Map());
+  const knownIds = useRef<Set<number>>(new Set());
+  const knownHashes = useRef<Map<number, string>>(new Map());
   const initialLoadDone = useRef(false);
 
   const playTripleTone = () => {
@@ -27,15 +32,12 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
       tones.forEach(({ freq, start }) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = "sine";
         osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-
         gain.gain.setValueAtTime(0, ctx.currentTime + start);
         gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + start + 0.05);
         gain.gain.setValueAtTime(0.4, ctx.currentTime + start + 0.2);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + 0.35);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(ctx.currentTime + start);
@@ -49,10 +51,11 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
   useEffect(() => {
     if (!incidents.length) return;
 
+    // On first load, seed the known sets without playing
     if (!initialLoadDone.current) {
       incidents.forEach(i => {
-        knownIncidentIds.current.add(i.id);
-        knownUpdateTimes.current.set(i.id, i.lastUpdated as string);
+        knownIds.current.add(i.id);
+        knownHashes.current.set(i.id, contentHash(i));
       });
       initialLoadDone.current = true;
       return;
@@ -60,21 +63,24 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
 
     let shouldPlay = false;
     incidents.forEach(i => {
-      if (!knownIncidentIds.current.has(i.id)) {
+      const hash = contentHash(i);
+      if (!knownIds.current.has(i.id)) {
+        // Brand new incident
         shouldPlay = true;
-        knownIncidentIds.current.add(i.id);
-        knownUpdateTimes.current.set(i.id, i.lastUpdated as string);
+        knownIds.current.add(i.id);
+        knownHashes.current.set(i.id, hash);
       } else {
-        const prev = knownUpdateTimes.current.get(i.id);
-        if (prev && prev !== (i.lastUpdated as string)) {
+        const prev = knownHashes.current.get(i.id);
+        if (prev !== undefined && prev !== hash) {
+          // Existing incident with meaningful content change
           shouldPlay = true;
-          knownUpdateTimes.current.set(i.id, i.lastUpdated as string);
+          knownHashes.current.set(i.id, hash);
         }
       }
     });
 
     if (shouldPlay) playTripleTone();
-  }, [incidents, enabled]);
+  }, [incidents]);
 
   return null;
 }

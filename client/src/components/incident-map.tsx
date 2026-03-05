@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { type IncidentListResponse } from "@shared/routes";
@@ -6,6 +6,7 @@ import { Flame, Shield, Activity, Car, MapPin } from "lucide-react";
 import { renderToString } from "react-dom/server";
 import { format } from "date-fns";
 import { useGeocodeAddresses } from "@/hooks/use-geocode";
+import { useSettings } from "@/hooks/use-settings";
 
 function MapController({ selectedLat, selectedLng }: { selectedLat?: number | null, selectedLng?: number | null }) {
   const map = useMap();
@@ -70,8 +71,14 @@ interface IncidentMapProps {
 
 export function IncidentMap({ incidents, selectedId, onSelectIncident }: IncidentMapProps) {
   const mapRef = useRef<L.Map>(null);
-  const [hasValidCenter, setHasValidCenter] = useState(false);
+  const hasValidCenter = useRef(false);
   const defaultCenter: [number, number] = [32.7157, -117.1611];
+  const { settings } = useSettings();
+
+  const isDark = settings.theme === "dark";
+  const tileUrl = isDark
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 
   const selectedIncident = incidents.find(i => i.id === selectedId);
 
@@ -90,17 +97,17 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
   const allPositions = incidents.map(getPosition).filter(Boolean) as [number, number][];
 
   useEffect(() => {
-    if (mapRef.current && allPositions.length > 0 && !hasValidCenter) {
+    if (mapRef.current && allPositions.length > 0 && !hasValidCenter.current) {
       const bounds = L.latLngBounds(allPositions);
       mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-      setHasValidCenter(true);
+      hasValidCenter.current = true;
     }
-  }, [allPositions.length, hasValidCenter]);
+  }, [allPositions.length]);
 
   const selectedPos = selectedIncident ? getPosition(selectedIncident) : null;
 
   return (
-    <div className="w-full h-full relative rounded-xl overflow-hidden border border-white/10 shadow-2xl z-0">
+    <div className="w-full h-full relative overflow-hidden z-0">
       <MapContainer
         center={defaultCenter}
         zoom={11}
@@ -109,8 +116,9 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
         zoomControl={false}
       >
         <TileLayer
+          key={tileUrl}
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url={tileUrl}
         />
 
         <MapController
@@ -161,16 +169,12 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
       <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
         <button
           onClick={() => mapRef.current?.zoomIn()}
-          className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
-        >
-          <span className="text-lg font-bold">+</span>
-        </button>
+          className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors font-bold text-lg"
+        >+</button>
         <button
           onClick={() => mapRef.current?.zoomOut()}
-          className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
-        >
-          <span className="text-lg font-bold">-</span>
-        </button>
+          className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors font-bold text-lg"
+        >−</button>
       </div>
 
       <div className="absolute bottom-3 right-3 z-[400]">

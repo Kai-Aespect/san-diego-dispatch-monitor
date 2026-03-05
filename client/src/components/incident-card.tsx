@@ -16,6 +16,19 @@ interface IncidentCardProps {
   onUnitClick: (e: React.MouseEvent, unit: string) => void;
 }
 
+// Extract response level prefix like "1a", "2a", "3a", "4a" from the call type string
+function extractResponseLevel(callType: string): string | null {
+  const match = callType.match(/^(\d+[a-z])\s/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+const RESPONSE_LEVEL_COLORS: Record<string, string> = {
+  "1a": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  "2a": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  "3a": "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  "4a": "bg-red-500/15 text-red-400 border-red-500/30",
+};
+
 export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: IncidentCardProps) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const { isBookmarked, toggleBookmark } = useBookmarks();
@@ -23,10 +36,11 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
   const isFire = incident.agency.toLowerCase() === 'fire';
   const isMedical = incident.callTypeFamily === 'Medical';
   const isTraffic = incident.callTypeFamily === 'Traffic';
-  
+
   const isNew = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.time)) < 15;
   const isUpdated = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.lastUpdated)) < 5 && !isNew;
   const bookmarked = isBookmarked(incident.id);
+  const responseLevel = extractResponseLevel(incident.callType);
 
   const handleAcknowledge = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -51,12 +65,12 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
   else if (!isFire) themeVariant = isTraffic ? "traffic" : "police";
 
   return (
-    <Card 
+    <Card
       onClick={onClick}
       className={cn(
         "cursor-pointer transition-all duration-200 overflow-hidden relative group border-white/5",
-        isSelected 
-          ? "ring-2 ring-primary bg-accent/40 shadow-xl translate-x-1" 
+        isSelected
+          ? "ring-2 ring-primary bg-accent/40 shadow-xl translate-x-1"
           : "hover:bg-accent/20 hover:border-white/10 hover:shadow-md",
         (isNew || isUpdated) && "border-primary/50 bg-primary/5 shadow-lg shadow-primary/5"
       )}
@@ -67,7 +81,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
         themeVariant === 'fire' ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" :
         themeVariant === 'police' ? "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" :
         themeVariant === 'medical' ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
-        themeVariant === 'traffic' ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : "bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]"
+        themeVariant === 'traffic' ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : "bg-primary"
       )} />
 
       <div className="p-4 pl-5">
@@ -77,6 +91,14 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
               <Clock className="w-3 h-3" />
               {format(new Date(incident.time), "HH:mm")}
             </span>
+            {responseLevel && (
+              <Badge
+                variant="outline"
+                className={cn("text-[9px] h-4 font-mono font-bold uppercase tracking-wide", RESPONSE_LEVEL_COLORS[responseLevel] || "bg-slate-500/15 text-slate-400 border-slate-500/30")}
+              >
+                {responseLevel}
+              </Badge>
+            )}
             {isNew && <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[9px] h-4">NEW</Badge>}
             {isUpdated && <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] h-4">UPDATED</Badge>}
             {incident.isMajor && (
@@ -87,9 +109,9 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
           </div>
           <div className="flex items-center gap-1.5">
             {(isNew || isUpdated) && (
-              <Button 
-                size="sm" 
-                variant="outline" 
+              <Button
+                size="sm"
+                variant="outline"
                 className="h-6 px-2 text-[10px] font-bold bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary"
                 onClick={handleAcknowledge}
                 disabled={isAcknowledging}
@@ -115,7 +137,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
           </div>
         </div>
 
-        <h3 className="font-display font-bold text-lg leading-tight mb-1 text-foreground group-hover:text-primary transition-colors">
+        <h3 className="font-display font-bold text-base leading-tight mb-1 text-foreground group-hover:text-primary transition-colors">
           {incident.callType}
         </h3>
 
@@ -160,7 +182,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
                   themeVariant === 'fire' ? "bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20" :
                   themeVariant === 'police' ? "bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20" :
                   themeVariant === 'medical' ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20" :
-                  themeVariant === 'traffic' ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20" : 
+                  themeVariant === 'traffic' ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20" :
                   "bg-secondary text-secondary-foreground"
                 )}
                 data-testid={`unit-${unit}-${incident.id}`}
