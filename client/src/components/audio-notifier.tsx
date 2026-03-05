@@ -23,18 +23,18 @@ export function AudioNotifier({ incidents }: AudioNotifierProps) {
       const osc = ctx.createOscillator();
       const gainNode = ctx.createGain();
       
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, ctx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
       
-      gainNode.gain.setValueAtTime(0.1, ctx.currentTime); // low volume
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime); // Louder
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); // Longer decay
       
       osc.connect(gainNode);
       gainNode.connect(ctx.destination);
       
       osc.start();
-      osc.stop(ctx.currentTime + 0.15);
+      osc.stop(ctx.currentTime + 0.6);
     } catch (e) {
       console.error("Audio playback failed", e);
     }

@@ -123,22 +123,23 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
                 click: () => onSelectIncident(incident)
               }}
             >
-              <Popup className="incident-popup">
-                <div className="p-3 min-w-[200px]">
-                  <div className="text-xs font-mono text-muted-foreground mb-1">
-                    {format(new Date(incident.time), "HH:mm:ss")} • {incident.incidentNo}
+              <Popup className="incident-popup" closeButton={false}>
+                <div className="p-3 min-w-[200px] bg-card text-card-foreground rounded-lg shadow-xl border border-white/10">
+                  <div className="text-[10px] font-mono text-muted-foreground mb-1 flex justify-between">
+                    <span>{format(new Date(incident.time), "HH:mm:ss")}</span>
+                    <span>{incident.incidentNo}</span>
                   </div>
-                  <h4 className="font-bold text-base mb-1 text-foreground">
+                  <h4 className="font-bold text-sm mb-2 text-primary border-b border-white/5 pb-1">
                     {incident.callType}
                   </h4>
-                  <div className="text-sm text-muted-foreground mb-2 flex items-start gap-1.5">
-                    <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
-                    <span>{incident.location}</span>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-start gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 text-primary" />
+                    <span className="leading-tight">{incident.location}</span>
                   </div>
                   {incident.units && incident.units.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-white/5">
                       {incident.units.map((unit, idx) => (
-                        <span key={idx} className="px-1.5 py-0.5 bg-secondary text-secondary-foreground rounded text-[10px] font-mono font-bold">
+                        <span key={idx} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[9px] font-mono font-bold">
                           {unit}
                         </span>
                       ))}

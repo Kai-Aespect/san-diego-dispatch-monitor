@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Radio, RefreshCcw, HelpCircle } from "lucide-react";
+import { Search, Radio, RefreshCcw, HelpCircle, Clock as ClockIcon } from "lucide-react";
 import { AudioNotifier } from "./audio-notifier";
 import { useSyncIncidents } from "@/hooks/use-incidents";
 import { type IncidentListResponse } from "@shared/routes";
@@ -19,6 +19,12 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ search, setSearch, incidents }: DashboardHeaderProps) {
   const syncMutation = useSyncIncidents();
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleListen = () => {
     window.open("https://www.broadcastify.com/listen/feed/20530", "_blank", "noopener,noreferrer");
@@ -32,9 +38,15 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/20">
               <Radio className="w-5 h-5 text-white" />
             </div>
-            <h1 className="font-display font-bold text-xl tracking-tight hidden sm:block text-foreground">
-              SD Dispatch<span className="text-primary">.Live</span>
-            </h1>
+            <div className="flex flex-col">
+              <h1 className="font-display font-bold text-lg tracking-tight hidden sm:block text-foreground leading-none">
+                SD Dispatch<span className="text-primary">.Live</span>
+              </h1>
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground mt-1">
+                <ClockIcon className="w-3 h-3 text-primary" />
+                {time.toLocaleTimeString('en-US', { hour12: false })}
+              </div>
+            </div>
           </div>
           
           <div className="relative flex-1 sm:w-64 max-w-md">
@@ -57,19 +69,45 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                 <HelpCircle className="w-5 h-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 bg-card border-white/10 shadow-2xl mr-4" align="end">
-              <div className="space-y-3">
-                <h4 className="font-display font-bold border-b border-white/10 pb-2">Unit Legend</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm font-mono">
-                  <div className="flex items-center gap-2"><span className="text-red-400 font-bold w-6">E</span> Engine</div>
-                  <div className="flex items-center gap-2"><span className="text-red-400 font-bold w-6">T</span> Truck</div>
-                  <div className="flex items-center gap-2"><span className="text-emerald-400 font-bold w-6">M</span> Medic</div>
-                  <div className="flex items-center gap-2"><span className="text-emerald-400 font-bold w-6">R</span> Rescue</div>
-                  <div className="flex items-center gap-2"><span className="text-amber-400 font-bold w-6">B</span> Battalion</div>
-                  <div className="flex items-center gap-2"><span className="text-blue-400 font-bold w-6">BR</span> Brush</div>
-                  <div className="flex items-center gap-2"><span className="text-purple-400 font-bold w-6">HZM</span> Hazmat</div>
-                  <div className="flex items-center gap-2"><span className="text-cyan-400 font-bold w-6">WT</span> Water</div>
-                </div>
+            <PopoverContent className="w-[400px] max-h-[80vh] overflow-y-auto bg-card border-white/10 shadow-2xl mr-4" align="end">
+              <div className="space-y-4">
+                <section>
+                  <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">Unit Type Legend</h4>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
+                    <div className="flex items-center gap-2"><span className="text-red-400 font-bold w-8">E</span> Engine</div>
+                    <div className="flex items-center gap-2"><span className="text-red-400 font-bold w-8">T</span> Truck</div>
+                    <div className="flex items-center gap-2"><span className="text-emerald-400 font-bold w-8">M</span> Medic (Ambulance)</div>
+                    <div className="flex items-center gap-2"><span className="text-emerald-400 font-bold w-8">R</span> Rescue</div>
+                    <div className="flex items-center gap-2"><span className="text-amber-400 font-bold w-8">B</span> Battalion Chief</div>
+                    <div className="flex items-center gap-2"><span className="text-blue-400 font-bold w-8">BR</span> Brush Engine</div>
+                    <div className="flex items-center gap-2"><span className="text-purple-400 font-bold w-8">HZM</span> Hazmat Unit</div>
+                    <div className="flex items-center gap-2"><span className="text-cyan-400 font-bold w-8">WT</span> Water Tender</div>
+                    <div className="flex items-center gap-2"><span className="text-pink-400 font-bold w-8">US&R</span> Urban Search & Rescue</div>
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">SDFD Response Levels</h4>
+                  <div className="space-y-1 text-[11px]">
+                    <p><span className="text-primary font-bold">1a:</span> Standard medical response (1 Engine + 1 Medic)</p>
+                    <p><span className="text-primary font-bold">2a:</span> Enhanced medical (2 Engines + 1 Medic)</p>
+                    <p><span className="text-primary font-bold">3a:</span> Critical medical / Cardiac</p>
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2">CA Common Codes</h4>
+                  <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
+                    <p><span className="text-primary">Code 1:</span> At your convenience</p>
+                    <p><span className="text-primary">Code 2:</span> Urgent (No lights/sirens)</p>
+                    <p><span className="text-primary">Code 3:</span> Emergency (Lights & Sirens)</p>
+                    <p><span className="text-primary">Code 4:</span> No further assistance needed</p>
+                    <p><span className="text-primary">10-4:</span> Acknowledged</p>
+                    <p><span className="text-primary">10-20:</span> Location</p>
+                    <p><span className="text-primary">10-97:</span> Arrived on scene</p>
+                    <p><span className="text-primary">10-98:</span> Assignment complete</p>
+                  </div>
+                </section>
               </div>
             </PopoverContent>
           </Popover>

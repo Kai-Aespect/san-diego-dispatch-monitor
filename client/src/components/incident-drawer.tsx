@@ -28,6 +28,8 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
+
   useEffect(() => {
     if (incident) {
       setNotes(incident.notes || "");
@@ -35,24 +37,38 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     }
   }, [incident]);
 
+  // Auto-save logic
+  useEffect(() => {
+    if (!incident || !isOpen) return;
+    const timer = setTimeout(() => {
+      if (notes !== (incident.notes || "") || JSON.stringify(tags) !== JSON.stringify(incident.tags || [])) {
+        handleSave();
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [notes, tags, isOpen]);
+
   if (!incident) return null;
 
   const handleSave = async () => {
+    if (isSaving) return;
     setIsSaving(true);
     try {
       await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags });
-      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
-      toast({ title: "Saved", description: "Incident details updated." });
+      queryClient.setQueryData(["/api/incidents"], (old: any) => 
+        old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
+      );
     } catch (e) {
-      toast({ title: "Error", description: "Failed to save updates.", variant: "destructive" });
+      console.error("Auto-save failed", e);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
+  const addTag = (tag: string) => {
+    const cleanTag = tag.trim();
+    if (cleanTag && !tags.includes(cleanTag)) {
+      setTags([...tags, cleanTag]);
       setTagInput("");
     }
   };
@@ -66,16 +82,18 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const agencyColor = isFire ? "text-red-400 bg-red-500/10" : "text-blue-400 bg-blue-500/10";
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText(incident.location);
+    const fullLocation = `${incident.location}${incident.crossStreets ? ` (Cross: ${incident.crossStreets})` : ''}, San Diego, CA`;
+    navigator.clipboard.writeText(fullLocation);
     toast({
       title: "Address Copied",
-      description: "Location copied to clipboard.",
+      description: "Full location details copied to clipboard.",
       duration: 2000,
     });
   };
 
   const openGoogleMaps = () => {
-    let url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${incident.location}, San Diego, CA`)}`;
+    const fullLocation = `${incident.location} and ${incident.crossStreets || ''}, San Diego, CA`;
+    let url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullLocation)}`;
     if (incident.lat && incident.lng) {
       url = `https://www.google.com/maps/search/?api=1&query=${incident.lat},${incident.lng}`;
     }
@@ -94,9 +112,12 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                 {agencyIcon}
                 <span className="ml-1.5 uppercase tracking-widest">{incident.agency}</span>
               </Badge>
-              <span className="text-sm font-mono text-muted-foreground bg-accent px-2 py-1 rounded-md">
-                #{incident.incidentNo}
-              </span>
+              <div className="flex items-center gap-2">
+                {isSaving && <span className="text-[10px] text-primary animate-pulse font-mono uppercase">Auto-Saving...</span>}
+                <span className="text-sm font-mono text-muted-foreground bg-accent px-2 py-1 rounded-md">
+                  #{incident.incidentNo}
+                </span>
+              </div>
             </div>
             <SheetTitle className="text-3xl font-display font-bold leading-tight mt-4">
               {incident.callType}
@@ -115,18 +136,37 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                 <Textarea 
                   value={notes} 
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add details, en-route status, etc..."
-                  className="bg-background/50 border-white/10 min-h-[100px]"
+                  placeholder="Type notes here... changes auto-save"
+                  className="bg-background/50 border-white/10 min-h-[100px] text-sm focus-visible:ring-primary/30"
                 />
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Tags</label>
-                <div className="flex flex-wrap gap-2 mb-2">
+                
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {defaultTags.map(tag => (
+                    <button 
+                      key={tag}
+                      onClick={() => addTag(tag)}
+                      disabled={tags.includes(tag)}
+                      className={cn(
+                        "text-[10px] px-2 py-1 rounded-full border transition-all",
+                        tags.includes(tag) 
+                          ? "bg-primary/20 border-primary/40 text-primary opacity-50" 
+                          : "bg-background/50 border-white/10 text-muted-foreground hover:border-primary/50 hover:text-primary"
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-3">
                   {tags.map(tag => (
                     <Badge key={tag} className="bg-primary/20 text-primary border-primary/30 flex items-center gap-1 pr-1">
                       {tag}
-                      <button onClick={() => removeTag(tag)} className="hover:text-destructive"><X size={12} /></button>
+                      <button onClick={() => removeTag(tag)} className="hover:text-destructive p-0.5 rounded-full hover:bg-destructive/10"><X size={10} /></button>
                     </Badge>
                   ))}
                 </div>
@@ -134,21 +174,13 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                   <input 
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addTag()}
-                    placeholder="Add tag (e.g. en-route)"
-                    className="flex-1 bg-background/50 border border-white/10 rounded-md px-3 py-1 text-sm outline-none focus:border-primary/50"
+                    onKeyDown={(e) => e.key === 'Enter' && addTag(tagInput)}
+                    placeholder="Custom tag..."
+                    className="flex-1 bg-background/50 border border-white/10 rounded-md px-3 py-1.5 text-sm outline-none focus:border-primary/50"
                   />
-                  <Button size="icon" variant="outline" onClick={addTag} className="h-8 w-8"><Plus size={16} /></Button>
+                  <Button size="icon" variant="outline" onClick={() => addTag(tagInput)} className="h-9 w-9 border-white/10 hover:bg-white/5"><Plus size={16} /></Button>
                 </div>
               </div>
-
-              <Button 
-                onClick={handleSave} 
-                disabled={isSaving}
-                className="w-full bg-primary text-primary-foreground font-bold"
-              >
-                {isSaving ? "Saving..." : "Save Updates"}
-              </Button>
             </div>
 
             {/* Location Section */}
