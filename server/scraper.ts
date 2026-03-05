@@ -150,8 +150,11 @@ export async function syncData(storage: any) {
   const all = [...fire, ...police];
   const incomingIds = new Set(all.map(inc => inc.incidentNo));
   
-  // Mark missing incidents as inactive
-  await storage.markMissingAsInactive(incomingIds);
+  // Mark missing incidents as inactive ONLY if we actually got data
+  // Use a higher threshold to avoid mass archiving during network blips
+  if (fire.length > 5 || police.length > 5) {
+    await storage.markMissingAsInactive(incomingIds);
+  }
 
   let synced = 0;
   for (const inc of all) {

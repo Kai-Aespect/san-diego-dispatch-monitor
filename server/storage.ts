@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { incidents, incidentHistory, type Incident, type InsertIncident, type IncidentHistory } from "@shared/schema";
-import { eq, desc, and, notInArray, sql } from "drizzle-orm";
+import { eq, desc, and, notInArray, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   getIncidents(): Promise<Incident[]>;
@@ -74,13 +74,17 @@ export class DatabaseStorage implements IStorage {
 
   async markMissingAsInactive(activeIds: Set<string>): Promise<void> {
     const ids = Array.from(activeIds);
-    if (ids.length === 0) {
-      await db.update(incidents).set({ active: false });
-      return;
-    }
+    if (ids.length === 0) return;
+    
+    // Mark everything not in the list as inactive
     await db.update(incidents)
       .set({ active: false })
       .where(and(eq(incidents.active, true), notInArray(incidents.incidentNo, ids)));
+      
+    // Re-activate everything currently in the list
+    await db.update(incidents)
+      .set({ active: true })
+      .where(inArray(incidents.incidentNo, ids));
   }
 
   async upsertIncident(incident: InsertIncident): Promise<Incident> {
@@ -134,7 +138,10 @@ export class DatabaseStorage implements IStorage {
 
       return updated;
     } else {
-      const [created] = await db.insert(incidents).values(incident).returning();
+      const [created] = await db.insert(incidents).values({
+        ...incident,
+        active: true
+      }).returning();
       await db.insert(incidentHistory).values({
         incidentId: created.id,
         source: 'sync',
