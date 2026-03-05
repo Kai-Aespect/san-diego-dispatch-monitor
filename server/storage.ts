@@ -30,8 +30,16 @@ export class DatabaseStorage implements IStorage {
   async upsertIncident(incident: InsertIncident): Promise<Incident> {
     const existing = await this.getIncidentByNo(incident.incidentNo);
     if (existing) {
+      const updateData: Partial<InsertIncident> = {
+        ...incident,
+        lastUpdated: new Date(),
+        notes: existing.notes,
+        tags: existing.tags,
+        lat: incident.lat ?? existing.lat,
+        lng: incident.lng ?? existing.lng,
+      };
       const [updated] = await db.update(incidents)
-        .set({ ...incident, lastUpdated: new Date() })
+        .set(updateData)
         .where(eq(incidents.id, existing.id))
         .returning();
       return updated;
