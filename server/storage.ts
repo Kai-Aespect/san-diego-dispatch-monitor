@@ -1,6 +1,8 @@
 import { db } from "./db";
 import { incidents, incidentHistory, type Incident, type InsertIncident, type IncidentHistory } from "@shared/schema";
-import { eq, desc, and, notInArray, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, notInArray, inArray, sql, lt } from "drizzle-orm";
+
+const MAX_HISTORY_PER_INCIDENT = 200;
 
 export interface IStorage {
   getIncidents(): Promise<Incident[]>;
@@ -66,6 +68,7 @@ export class DatabaseStorage implements IStorage {
           summary: `System: coordinates updated`,
           changes: systemChanges,
         });
+        await this.pruneHistory(id);
       }
       if (userChanges.length > 0) {
         const summary = `User updated: ${userChanges.map(c => c.field).join(', ')}`;
@@ -75,6 +78,7 @@ export class DatabaseStorage implements IStorage {
           summary,
           changes: userChanges,
         });
+        await this.pruneHistory(id);
       }
     }
 
@@ -85,6 +89,17 @@ export class DatabaseStorage implements IStorage {
     await db.update(incidents)
       .set({ acknowledged: true })
       .where(eq(incidents.acknowledged, false));
+  }
+
+  private async pruneHistory(incidentId: number): Promise<void> {
+    const rows = await db.select({ id: incidentHistory.id })
+      .from(incidentHistory)
+      .where(eq(incidentHistory.incidentId, incidentId))
+      .orderBy(desc(incidentHistory.changedAt));
+    if (rows.length > MAX_HISTORY_PER_INCIDENT) {
+      const toDelete = rows.slice(MAX_HISTORY_PER_INCIDENT).map(r => r.id);
+      await db.delete(incidentHistory).where(inArray(incidentHistory.id, toDelete));
+    }
   }
 
   async markMissingAsInactive(activeIds: Set<string>): Promise<void> {
@@ -149,6 +164,7 @@ export class DatabaseStorage implements IStorage {
           summary,
           changes,
         });
+        await this.pruneHistory(existing.id);
       }
 
       return updated;

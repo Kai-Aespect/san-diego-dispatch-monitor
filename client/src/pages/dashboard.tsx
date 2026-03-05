@@ -9,7 +9,7 @@ import { UnitDialog } from "@/components/unit-dialog";
 import { SidePanel } from "@/components/side-panel";
 import { AudioNotifier } from "@/components/audio-notifier";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
-import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity } from "lucide-react";
+import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -241,9 +241,21 @@ export default function Dashboard() {
             {filteredIncidents.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8 text-center border-2 border-dashed border-white/5 rounded-xl">
                 <div className="w-16 h-16 rounded-full bg-accent/50 flex items-center justify-center">
-                  <AlertTriangle className="w-8 h-8 opacity-50" />
+                  {activeTab === "police" && !showArchived
+                    ? <ShieldOff className="w-8 h-8 opacity-50" />
+                    : <AlertTriangle className="w-8 h-8 opacity-50" />
+                  }
                 </div>
-                <p>No {showArchived ? "completed" : "active"} incidents found.</p>
+                {activeTab === "police" && !showArchived ? (
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground/60">No active police calls</p>
+                    <p className="text-xs text-muted-foreground/70 max-w-[220px]">
+                      The SDPD dispatch feed may be temporarily unavailable. Data will appear automatically when the source comes back online.
+                    </p>
+                  </div>
+                ) : (
+                  <p>No {showArchived ? "completed" : "active"} incidents found.</p>
+                )}
               </div>
             ) : (
               filteredIncidents.map(incident => (

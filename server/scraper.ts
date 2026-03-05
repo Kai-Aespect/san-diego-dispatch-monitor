@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { createHash } from 'crypto';
 import { type InsertIncident } from '@shared/schema';
 import { geocodePendingIncidents } from './geocoder';
 
@@ -118,8 +119,14 @@ export async function fetchPoliceIncidents(): Promise<InsertIncident[]> {
         else if (typeLower.includes('assault') || typeLower.includes('shoot') || typeLower.includes('weapon') || typeLower.includes('245') || typeLower.includes('187')) family = 'Rescue';
         else if (typeLower.includes('medical') || typeLower.includes('5150')) family = 'Medical';
 
-        // Police table doesn't have incident number, we create a hash based on time and location
-        const incidentHash = Buffer.from(`${timeStr}-${callType}-${loc2}`).toString('base64').substring(0, 15);
+        // Police table doesn't have incident numbers — derive a stable ID via SHA-256
+        // so each unique (time, callType, location) combination always maps to the same ID.
+        // Using SHA-256 avoids the base64 prefix-collision bug where all calls on the same
+        // day shared the same first 15 chars of base64(date + ...).
+        const incidentHash = createHash('sha256')
+          .update(`${timeStr}-${callType}-${loc2}`)
+          .digest('hex')
+          .substring(0, 16);
         
         incidents.push({
           agency: 'police',
