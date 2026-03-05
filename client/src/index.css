@@ -41,11 +41,41 @@
     --font-display: 'Outfit', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     
-    /* Custom semantic colors */
     --fire: 10 80% 50%;
     --police: 220 80% 50%;
     --medical: 150 80% 40%;
     --traffic: 40 90% 50%;
+  }
+
+  /* Light mode overrides */
+  .light {
+    --background: 210 20% 96%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 217.2 91.2% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 88%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 210 20% 90%;
+    --muted-foreground: 215 16% 40%;
+
+    --accent: 210 20% 90%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 82%;
+    --input: 214 32% 82%;
+    --ring: 217.2 91.2% 50%;
   }
 }
 
@@ -60,6 +90,12 @@
       radial-gradient(circle at 15% 50%, rgba(20, 30, 60, 0.15), transparent 25%),
       radial-gradient(circle at 85% 30%, rgba(30, 20, 50, 0.15), transparent 25%);
     background-attachment: fixed;
+  }
+
+  .light body, html.light body {
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(200, 210, 240, 0.2), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(210, 200, 230, 0.2), transparent 25%);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -81,10 +117,31 @@
     @apply bg-card/60 backdrop-blur-xl border border-white/10 shadow-xl;
   }
 
-  /* Custom Leaflet overrides for dark mode */
+  .light .glass-panel {
+    @apply bg-card/90 border-black/10;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Custom Leaflet overrides */
   .leaflet-container {
     background: #0f172a !important;
     font-family: var(--font-sans) !important;
+  }
+
+  .light .leaflet-container {
+    background: #e2e8f0 !important;
   }
   .leaflet-popup-content-wrapper {
     @apply bg-card text-card-foreground border border-white/10 shadow-2xl rounded-xl p-0 overflow-hidden;
@@ -96,7 +153,6 @@
     @apply bg-card text-foreground border-white/10 hover:bg-accent hover:text-accent-foreground transition-colors !important;
   }
   
-  /* Blinking dot animation */
   @keyframes ping-slow {
     75%, 100% {
       transform: scale(2);
@@ -105,5 +161,15 @@
   }
   .animate-ping-slow {
     animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    background-size: 200% auto;
+    animation: shimmer 2s linear infinite;
   }
 }

@@ -4,13 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { type IncidentListResponse } from "@shared/routes";
-import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight } from "lucide-react";
+import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight, Bookmark, BookmarkCheck } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 
 interface IncidentDrawerProps {
   incident: IncidentListResponse[0] | null;
@@ -36,7 +37,12 @@ const FIELD_LABELS: Record<string, string> = {
   notes: "Notes",
   tags: "Tags",
   acknowledged: "Acknowledged",
+  lat: "Latitude",
+  lng: "Longitude",
 };
+
+// Fields that are always system-updated regardless of source label
+const SYSTEM_ONLY_FIELDS = new Set(["lat", "lng"]);
 
 export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawerProps) {
   const { toast } = useToast();
@@ -45,6 +51,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
+  const { isBookmarked, toggleBookmark } = useBookmarks();
 
   const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
 
@@ -56,7 +63,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
       return res.json();
     },
     enabled: !!incident && isOpen,
-    refetchInterval: 30000,
+    refetchInterval: 15000,
   });
 
   useEffect(() => {
@@ -77,6 +84,8 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   }, [notes, tags, isOpen]);
 
   if (!incident) return null;
+
+  const bookmarked = isBookmarked(incident.id);
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -125,6 +134,23 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Determine the correct label for a history entry source
+  const getSourceLabel = (entry: HistoryEntry) => {
+    // If all changes are system-only fields, always show SYSTEM
+    if (entry.changes && entry.changes.length > 0) {
+      const allSystemFields = entry.changes.every(c => SYSTEM_ONLY_FIELDS.has(c.field));
+      if (allSystemFields) return "SYSTEM";
+    }
+    return entry.source === 'sync' ? 'SYNC' : 'USER';
+  };
+
+  const getSourceStyle = (entry: HistoryEntry) => {
+    const label = getSourceLabel(entry);
+    if (label === 'SYNC') return "bg-blue-500/15 text-blue-400";
+    if (label === 'SYSTEM') return "bg-slate-500/15 text-slate-400";
+    return "bg-amber-500/15 text-amber-400";
+  };
+
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto bg-card border-l-white/10 p-0 z-[100]">
@@ -139,6 +165,13 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
               </Badge>
               <div className="flex items-center gap-2">
                 {isSaving && <span className="text-[10px] text-primary animate-pulse font-mono uppercase">Saving...</span>}
+                <button
+                  onClick={() => toggleBookmark(incident.id)}
+                  className={cn("p-1.5 rounded-lg transition-all", bookmarked ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-primary/5")}
+                  title={bookmarked ? "Remove bookmark" : "Track this call"}
+                >
+                  {bookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                </button>
                 <span className="text-sm font-mono text-muted-foreground bg-accent px-2 py-1 rounded-md">
                   #{incident.incidentNo}
                 </span>
@@ -167,7 +200,6 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
           </div>
 
           <TabsContent value="details" className="p-6 pt-4 space-y-5">
-            {/* Location */}
             <div className="bg-accent/40 rounded-xl p-4 border border-white/5">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Location</h4>
               <div className="flex items-start gap-3 mb-4">
@@ -197,7 +229,6 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
               </div>
             </div>
 
-            {/* Units */}
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assigned Units ({incident.units?.length || 0})</h4>
               {incident.units && incident.units.length > 0 ? (
@@ -215,7 +246,6 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
               )}
             </div>
 
-            {/* Status */}
             {incident.status && (
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status</h4>
@@ -293,42 +323,43 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
               </div>
             ) : (
               <div className="space-y-3">
-                {history.map((entry) => (
-                  <div key={entry.id} className="bg-accent/20 rounded-lg p-3 border border-white/5">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[9px] h-4 px-1.5 border-0",
-                            entry.source === 'sync' ? "bg-blue-500/15 text-blue-400" : "bg-amber-500/15 text-amber-400"
-                          )}
-                        >
-                          {entry.source === 'sync' ? 'SYNC' : 'USER'}
-                        </Badge>
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          {formatDistanceToNow(new Date(entry.changedAt), { addSuffix: true })}
+                {history.map((entry) => {
+                  const sourceLabel = getSourceLabel(entry);
+                  const sourceStyle = getSourceStyle(entry);
+                  return (
+                    <div key={entry.id} className="bg-accent/20 rounded-lg p-3 border border-white/5">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={cn("text-[9px] h-4 px-1.5 border-0", sourceStyle)}
+                          >
+                            {sourceLabel}
+                          </Badge>
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {formatDistanceToNow(new Date(entry.changedAt), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-mono text-muted-foreground/40">
+                          {format(new Date(entry.changedAt), "HH:mm:ss")}
                         </span>
                       </div>
-                      <span className="text-[9px] font-mono text-muted-foreground/40">
-                        {format(new Date(entry.changedAt), "HH:mm:ss")}
-                      </span>
+                      <p className="text-xs text-foreground font-medium">{entry.summary}</p>
+                      {entry.changes && entry.changes.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {entry.changes.map((change, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
+                              <span className="text-primary/70">{FIELD_LABELS[change.field] || change.field}:</span>
+                              <span className="line-through opacity-50 max-w-[80px] truncate">{change.oldValue || 'empty'}</span>
+                              <ArrowRight className="w-2.5 h-2.5 shrink-0 text-primary/40" />
+                              <span className="text-foreground/80 max-w-[100px] truncate">{change.newValue || 'empty'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-foreground font-medium">{entry.summary}</p>
-                    {entry.changes && entry.changes.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {entry.changes.map((change, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
-                            <span className="text-primary/70">{FIELD_LABELS[change.field] || change.field}:</span>
-                            <span className="line-through opacity-50 max-w-[80px] truncate">{change.oldValue || 'empty'}</span>
-                            <ArrowRight className="w-2.5 h-2.5 shrink-0 text-primary/40" />
-                            <span className="text-foreground/80 max-w-[100px] truncate">{change.newValue || 'empty'}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </TabsContent>

@@ -44,21 +44,36 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     if (existing) {
-      const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
+      // Separate system fields (lat/lng set by geocoder) from user fields
+      const SYSTEM_FIELDS = new Set(['lat', 'lng']);
+      const systemChanges: Array<{ field: string; oldValue: string; newValue: string }> = [];
+      const userChanges: Array<{ field: string; oldValue: string; newValue: string }> = [];
+
       for (const key of Object.keys(updates) as Array<keyof typeof updates>) {
         const oldVal = stringify(existing[key]);
         const newVal = stringify(updates[key]);
         if (oldVal !== newVal && key !== 'lastUpdated') {
-          changes.push({ field: key, oldValue: oldVal, newValue: newVal });
+          const change = { field: key, oldValue: oldVal, newValue: newVal };
+          if (SYSTEM_FIELDS.has(key)) systemChanges.push(change);
+          else userChanges.push(change);
         }
       }
-      if (changes.length > 0) {
-        const summary = `User updated: ${changes.map(c => c.field).join(', ')}`;
+
+      if (systemChanges.length > 0) {
+        await db.insert(incidentHistory).values({
+          incidentId: id,
+          source: 'sync',
+          summary: `System: coordinates updated`,
+          changes: systemChanges,
+        });
+      }
+      if (userChanges.length > 0) {
+        const summary = `User updated: ${userChanges.map(c => c.field).join(', ')}`;
         await db.insert(incidentHistory).values({
           incidentId: id,
           source: 'user',
           summary,
-          changes,
+          changes: userChanges,
         });
       }
     }

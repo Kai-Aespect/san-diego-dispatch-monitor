@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Radio, RefreshCcw, HelpCircle, Clock as ClockIcon } from "lucide-react";
-import { AudioNotifier } from "./audio-notifier";
+import { Search, Radio, RefreshCcw, HelpCircle, Clock as ClockIcon, Volume2, VolumeX } from "lucide-react";
 import { useSyncIncidents } from "@/hooks/use-incidents";
+import { useSettings } from "@/hooks/use-settings";
 import { type IncidentListResponse } from "@shared/routes";
 import {
   Popover,
@@ -20,6 +20,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ search, setSearch, incidents }: DashboardHeaderProps) {
   const syncMutation = useSyncIncidents();
   const [time, setTime] = useState(new Date());
+  const { settings, setVolumeEnabled } = useSettings();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -56,12 +57,25 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-black/20 border-white/10 focus-visible:ring-primary/50 w-full"
+              data-testid="input-search"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <AudioNotifier incidents={incidents} />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setVolumeEnabled(!settings.volumeEnabled)}
+            title={settings.volumeEnabled ? "Mute alerts" : "Enable alerts"}
+            className={`relative transition-colors ${settings.volumeEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+            data-testid="button-toggle-volume"
+          >
+            {settings.volumeEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            {settings.volumeEnabled && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary animate-ping" />
+            )}
+          </Button>
           
           <Popover>
             <PopoverTrigger asChild>

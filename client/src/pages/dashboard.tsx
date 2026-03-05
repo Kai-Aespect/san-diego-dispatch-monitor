@@ -1,10 +1,13 @@
 import { useState, useMemo } from "react";
 import { useIncidents, useStatus } from "@/hooks/use-incidents";
+import { useSettings } from "@/hooks/use-settings";
 import { IncidentCard } from "@/components/incident-card";
 import { IncidentMap } from "@/components/incident-map";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
 import { UnitDialog } from "@/components/unit-dialog";
+import { SidePanel } from "@/components/side-panel";
+import { AudioNotifier } from "@/components/audio-notifier";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
 import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +29,7 @@ type FilterMode =
 export default function Dashboard() {
   const { data: incidents = [], isLoading } = useIncidents();
   const { data: status } = useStatus();
+  const { settings } = useSettings();
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
@@ -61,7 +65,6 @@ export default function Dashboard() {
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter(incident => {
-      // Archive filter
       if (showArchived) {
         if (incident.active) return false;
       } else {
@@ -158,6 +161,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
+      <AudioNotifier incidents={incidents} enabled={settings.volumeEnabled} />
       <DashboardHeader search={search} setSearch={setSearch} incidents={incidents} />
 
       {status?.isStale && (
@@ -169,7 +173,8 @@ export default function Dashboard() {
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-[1920px] mx-auto w-full">
 
-        <div className={`w-full lg:w-[450px] xl:w-[500px] flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'}`}>
+        {/* Left: Call list */}
+        <div className={`w-full lg:w-[420px] xl:w-[460px] flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'}`}>
 
           <div className="p-4 space-y-3 border-b border-white/5 bg-card/30 z-10">
             <div className="flex items-center justify-between gap-2">
@@ -186,6 +191,7 @@ export default function Dashboard() {
                 className={`h-9 px-3 border-white/10 ${showArchived ? 'bg-primary/20 text-primary' : 'bg-black/40 text-muted-foreground'}`}
                 onClick={() => setShowArchived(!showArchived)}
                 title={showArchived ? "Show Active Calls" : "Show Completed Archive"}
+                data-testid="button-toggle-archive"
               >
                 {showArchived ? <Activity className="w-4 h-4" /> : <History className="w-4 h-4" />}
               </Button>
@@ -224,9 +230,7 @@ export default function Dashboard() {
             </div>
 
             <div className="text-xs font-mono text-muted-foreground flex justify-between">
-              <span>
-                {showArchived ? "Completed Archive" : "Active Dispatch"}
-              </span>
+              <span>{showArchived ? "Completed Archive" : "Active Dispatch"}</span>
               <span>
                 <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.filter(i => showArchived ? !i.active : i.active).length}</span>
               </span>
@@ -255,7 +259,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className={`flex-1 relative h-full bg-slate-950 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
+        {/* Middle: Map (smaller) */}
+        <div className={`flex-1 relative h-full bg-slate-950 min-w-0 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
           <IncidentMap
             incidents={filteredIncidents}
             selectedId={selectedIncidentId}
@@ -263,6 +268,12 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* Right: Side Panel (hidden on mobile) */}
+        <div className="hidden lg:flex h-full">
+          <SidePanel incidents={incidents} onSelectIncident={handleIncidentClick} />
+        </div>
+
+        {/* Mobile toggle */}
         <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[500]">
           <div className="bg-card/90 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-2xl flex items-center">
             <button
