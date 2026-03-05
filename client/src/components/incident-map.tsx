@@ -11,7 +11,7 @@ import { useSettings } from "@/hooks/use-settings";
 function MapController({ selectedLat, selectedLng }: { selectedLat?: number | null, selectedLng?: number | null }) {
   const map = useMap();
   useEffect(() => {
-    if (selectedLat && selectedLng) {
+    if (typeof selectedLat === 'number' && typeof selectedLng === 'number' && !isNaN(selectedLat) && !isNaN(selectedLng)) {
       map.flyTo([selectedLat, selectedLng], 16, { duration: 1.5 });
     }
   }, [selectedLat, selectedLng, map]);
