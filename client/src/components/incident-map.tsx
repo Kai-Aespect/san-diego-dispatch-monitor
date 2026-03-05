@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import { type IncidentListResponse } from "@shared/routes";
 import { Flame, Shield, Activity, Car, MapPin } from "lucide-react";
 import { renderToString } from "react-dom/server";
-import { format } from "date-fns";
 import { useGeocodeAddresses } from "@/hooks/use-geocode";
 import { useSettings } from "@/hooks/use-settings";
 
@@ -13,18 +12,14 @@ function MapController({ selectedLat, selectedLng }: { selectedLat?: number | nu
   useEffect(() => {
     const lat = Number(selectedLat);
     const lng = Number(selectedLng);
-    // Only fly if coordinates are valid AND the map container has visible dimensions
-    // (prevents crash when map is hidden behind the list view on mobile)
     const container = map.getContainer();
     const hasSize = container.clientWidth > 0 && container.clientHeight > 0;
     if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && hasSize) {
       try {
-        // Use setView with animate:false to avoid async animation frames
-        // that crash when the map container gets hidden mid-flight
         map.stop();
         map.setView([lat, lng], 16, { animate: false });
       } catch (e) {
-        // Silently ignore errors (e.g. map not ready)
+        // ignore
       }
     }
   }, [selectedLat, selectedLng, map]);
@@ -59,10 +54,10 @@ const createCustomIcon = (agency: string, family?: string | null, isMajor?: bool
   }
 
   const html = `
-    <div class="relative flex items-center justify-center w-8 h-8">
+    <div class="relative flex items-center justify-center w-10 h-10" style="cursor:pointer;touch-action:none;">
       ${pulseClass}
-      <div class="relative z-10 flex items-center justify-center w-8 h-8 rounded-full shadow-lg ${colorClass} border-2 border-white/20">
-        ${renderToString(<IconComponent size={16} />)}
+      <div class="relative z-10 flex items-center justify-center w-10 h-10 rounded-full shadow-lg ${colorClass} border-2 border-white/20">
+        ${renderToString(<IconComponent size={18} />)}
       </div>
     </div>
   `;
@@ -70,11 +65,75 @@ const createCustomIcon = (agency: string, family?: string | null, isMajor?: bool
   return L.divIcon({
     html,
     className: 'custom-leaflet-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -20],
   });
 };
+
+interface TouchMarkerProps {
+  incident: IncidentListResponse[0];
+  position: [number, number];
+  icon: L.DivIcon;
+  onSelectIncident: (incident: IncidentListResponse[0]) => void;
+}
+
+function TouchMarker({ incident, position, icon, onSelectIncident }: TouchMarkerProps) {
+  const markerRef = useRef<L.Marker>(null);
+
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return;
+
+    const el = marker.getElement();
+    if (!el) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+      const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+      const dt = Date.now() - touchStartTime;
+      // Only treat as a tap if finger didn't move much and duration was short
+      if (dx < 15 && dy < 15 && dt < 500) {
+        e.preventDefault();
+        e.stopPropagation();
+        onSelectIncident(incident);
+      }
+    };
+
+    // Use passive:false on touchend so we can call preventDefault (stops map pan)
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: false });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [incident, onSelectIncident]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={position}
+      icon={icon}
+      eventHandlers={{
+        click: (e) => {
+          L.DomEvent.stopPropagation(e);
+          onSelectIncident(incident);
+        },
+      }}
+    />
+  );
+}
 
 interface IncidentMapProps {
   incidents: IncidentListResponse;
@@ -155,46 +214,13 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
           if (!pos) return null;
 
           return (
-            <Marker
+            <TouchMarker
               key={incident.id}
+              incident={incident}
               position={pos}
               icon={createCustomIcon(incident.agency, incident.callTypeFamily, incident.isMajor)}
-              eventHandlers={{
-                click: (e) => {
-                  L.DomEvent.stopPropagation(e);
-                  onSelectIncident(incident);
-                },
-                touchend: (e) => {
-                  L.DomEvent.stopPropagation(e);
-                  onSelectIncident(incident);
-                }
-              }}
-            >
-              <Popup className="incident-popup" closeButton={false}>
-                <div className="p-3 min-w-[200px] bg-card text-card-foreground rounded-lg shadow-xl border border-white/10">
-                  <div className="text-[10px] font-mono text-muted-foreground mb-1 flex justify-between">
-                    <span>{format(new Date(incident.time), "HH:mm:ss")}</span>
-                    <span>{incident.incidentNo}</span>
-                  </div>
-                  <h4 className="font-bold text-sm mb-2 text-primary border-b border-white/5 pb-1">
-                    {incident.callType}
-                  </h4>
-                  <div className="text-xs text-muted-foreground mb-2 flex items-start gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 text-primary" />
-                    <span className="leading-tight">{incident.location}</span>
-                  </div>
-                  {incident.units && incident.units.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-white/5">
-                      {incident.units.map((unit, idx) => (
-                        <span key={idx} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[9px] font-mono font-bold">
-                          {unit}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
+              onSelectIncident={onSelectIncident}
+            />
           );
         })}
       </MapContainer>
