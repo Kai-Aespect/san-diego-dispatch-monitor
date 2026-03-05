@@ -276,7 +276,7 @@ export default function Dashboard() {
 
       {/* ── MOBILE layout (<lg): toggled list / map ── */}
       <main className="flex lg:hidden flex-1 overflow-hidden min-h-0 relative">
-        <div className={cn("absolute inset-0 flex flex-col", mobileView === "list" ? "block" : "hidden")}>
+        <div className={cn("absolute inset-0 flex flex-col", mobileView !== "list" && "hidden")}>
           <CallListContent {...callListProps} />
         </div>
         <div className={cn("absolute inset-0 bg-slate-950", mobileView === "map" ? "block" : "hidden")}>
@@ -437,7 +437,7 @@ function CallListContent({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-3 pb-24 space-y-2.5 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         {filteredIncidents.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8 text-center">
             <div className="w-14 h-14 rounded-full bg-accent/50 flex items-center justify-center">

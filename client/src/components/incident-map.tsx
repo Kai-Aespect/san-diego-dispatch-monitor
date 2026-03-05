@@ -13,12 +13,18 @@ function MapController({ selectedLat, selectedLng }: { selectedLat?: number | nu
   useEffect(() => {
     const lat = Number(selectedLat);
     const lng = Number(selectedLng);
-    
-    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    // Only fly if coordinates are valid AND the map container has visible dimensions
+    // (prevents crash when map is hidden behind the list view on mobile)
+    const container = map.getContainer();
+    const hasSize = container.clientWidth > 0 && container.clientHeight > 0;
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && hasSize) {
       try {
-        map.flyTo([lat, lng], 16, { duration: 1.5 });
+        // Use setView with animate:false to avoid async animation frames
+        // that crash when the map container gets hidden mid-flight
+        map.stop();
+        map.setView([lat, lng], 16, { animate: false });
       } catch (e) {
-        console.error("Map flyTo error:", e);
+        // Silently ignore errors (e.g. map not ready)
       }
     }
   }, [selectedLat, selectedLng, map]);
@@ -132,8 +138,6 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
         className="w-full h-full"
         ref={mapRef}
         zoomControl={false}
-        tap={false} // Disable tap handler for better mobile marker interaction
-        preferCanvas={true}
       >
         <TileLayer
           key={tileUrl}
@@ -157,6 +161,10 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
               icon={createCustomIcon(incident.agency, incident.callTypeFamily, incident.isMajor)}
               eventHandlers={{
                 click: (e) => {
+                  L.DomEvent.stopPropagation(e);
+                  onSelectIncident(incident);
+                },
+                touchend: (e) => {
                   L.DomEvent.stopPropagation(e);
                   onSelectIncident(incident);
                 }
