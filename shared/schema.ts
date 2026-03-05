@@ -21,6 +21,7 @@ export const incidents = pgTable("incidents", {
   notes: text("notes"),
   tags: jsonb("tags").$type<string[]>().default([]),
   acknowledged: boolean("acknowledged").default(false),
+  active: boolean("active").default(true),
 });
 
 export const incidentHistory = pgTable("incident_history", {

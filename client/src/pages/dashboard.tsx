@@ -6,7 +6,7 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
 import { UnitDialog } from "@/components/unit-dialog";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
-import { AlertTriangle, Map as MapIcon, List, CheckCheck } from "lucide-react";
+import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("all");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [isAckingAll, setIsAckingAll] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -60,6 +61,13 @@ export default function Dashboard() {
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter(incident => {
+      // Archive filter
+      if (showArchived) {
+        if (incident.active) return false;
+      } else {
+        if (!incident.active) return false;
+      }
+
       if (activeTab === "fire" && incident.agency.toLowerCase() !== "fire") return false;
       if (activeTab === "police" && incident.agency.toLowerCase() !== "police") return false;
 
@@ -119,7 +127,7 @@ export default function Dashboard() {
       if (!a.isMajor && b.isMajor) return 1;
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [incidents, activeTab, filterMode, search]);
+  }, [incidents, activeTab, filterMode, search, showArchived]);
 
   const selectedIncident = useMemo(() =>
     incidents.find(i => i.id === selectedIncidentId) || null
@@ -164,13 +172,24 @@ export default function Dashboard() {
         <div className={`w-full lg:w-[450px] xl:w-[500px] flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'}`}>
 
           <div className="p-4 space-y-3 border-b border-white/5 bg-card/30 z-10">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
-                <TabsTrigger value="all" className="font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
-                <TabsTrigger value="fire" className="font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400">Fire/Med</TabsTrigger>
-                <TabsTrigger value="police" className="font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">Police</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center justify-between gap-2">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+                <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
+                  <TabsTrigger value="all" className="font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
+                  <TabsTrigger value="fire" className="font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400">Fire/Med</TabsTrigger>
+                  <TabsTrigger value="police" className="font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">Police</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-9 px-3 border-white/10 ${showArchived ? 'bg-primary/20 text-primary' : 'bg-black/40 text-muted-foreground'}`}
+                onClick={() => setShowArchived(!showArchived)}
+                title={showArchived ? "Show Active Calls" : "Show Completed Archive"}
+              >
+                {showArchived ? <Activity className="w-4 h-4" /> : <History className="w-4 h-4" />}
+              </Button>
+            </div>
 
             <div className="flex items-center gap-2">
               <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
@@ -204,8 +223,13 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="text-xs font-mono text-muted-foreground">
-              Showing <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.length}</span> incidents
+            <div className="text-xs font-mono text-muted-foreground flex justify-between">
+              <span>
+                {showArchived ? "Completed Archive" : "Active Dispatch"}
+              </span>
+              <span>
+                <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.filter(i => showArchived ? !i.active : i.active).length}</span>
+              </span>
             </div>
           </div>
 
@@ -215,7 +239,7 @@ export default function Dashboard() {
                 <div className="w-16 h-16 rounded-full bg-accent/50 flex items-center justify-center">
                   <AlertTriangle className="w-8 h-8 opacity-50" />
                 </div>
-                <p>No incidents matching your filters.</p>
+                <p>No {showArchived ? "completed" : "active"} incidents found.</p>
               </div>
             ) : (
               filteredIncidents.map(incident => (

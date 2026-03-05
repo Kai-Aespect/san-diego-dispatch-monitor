@@ -64,7 +64,8 @@ export async function fetchFireIncidents(): Promise<InsertIncident[]> {
         isMajor: isMajor,
         lat,
         lng,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        active: true
       });
     }
     
@@ -129,7 +130,8 @@ export async function fetchPoliceIncidents(): Promise<InsertIncident[]> {
           location: loc2,
           neighborhood: loc1 || neighborhood,
           isMajor: false,
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
+          active: true
         });
       }
     });
@@ -146,6 +148,11 @@ export async function syncData(storage: any) {
   const police = await fetchPoliceIncidents();
   
   const all = [...fire, ...police];
+  const incomingIds = new Set(all.map(inc => inc.incidentNo));
+  
+  // Mark missing incidents as inactive
+  await storage.markMissingAsInactive(incomingIds);
+
   let synced = 0;
   for (const inc of all) {
     try {

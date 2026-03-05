@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { incidents, incidentHistory, type Incident, type InsertIncident, type IncidentHistory } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, notInArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   getIncidents(): Promise<Incident[]>;
@@ -9,6 +9,7 @@ export interface IStorage {
   updateIncident(id: number, updates: Partial<Incident>): Promise<Incident>;
   acknowledgeAll(): Promise<void>;
   getIncidentHistory(incidentId: number): Promise<IncidentHistory[]>;
+  markMissingAsInactive(activeIds: Set<string>): Promise<void>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -71,6 +72,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(incidents.acknowledged, false));
   }
 
+  async markMissingAsInactive(activeIds: Set<string>): Promise<void> {
+    const ids = Array.from(activeIds);
+    if (ids.length === 0) {
+      await db.update(incidents).set({ active: false });
+      return;
+    }
+    await db.update(incidents)
+      .set({ active: false })
+      .where(and(eq(incidents.active, true), notInArray(incidents.incidentNo, ids)));
+  }
+
   async upsertIncident(incident: InsertIncident): Promise<Incident> {
     const existing = await this.getIncidentByNo(incident.incidentNo);
     if (existing) {
@@ -91,6 +103,7 @@ export class DatabaseStorage implements IStorage {
         acknowledged: existing.acknowledged,
         lat: incident.lat ?? existing.lat,
         lng: incident.lng ?? existing.lng,
+        active: true,
       };
 
       const [updated] = await db.update(incidents)
