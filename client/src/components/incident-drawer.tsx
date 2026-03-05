@@ -181,6 +181,9 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
             <SheetTitle className="text-2xl font-display font-bold leading-tight mt-3">
               {incident.callType}
             </SheetTitle>
+            <p className="text-sm text-primary font-mono font-bold uppercase tracking-wider mt-0.5">
+              {incident.callTypeFamily}
+            </p>
             <p className="text-sm text-muted-foreground italic mt-1 leading-snug">
               {getCallDescription(incident.callType, incident.callTypeFamily)}
             </p>
