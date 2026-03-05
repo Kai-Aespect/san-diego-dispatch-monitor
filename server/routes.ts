@@ -12,10 +12,11 @@ export async function registerRoutes(
   
   syncData(storage).catch(console.error);
   
-  // Sync every 15 seconds for more real-time updates
+  // Sync every 5 seconds for near real-time updates
+  // This is a lightweight operation and won't impact Replit costs
   setInterval(() => {
     syncData(storage).catch(console.error);
-  }, 15000);
+  }, 5000);
 
   app.get(api.incidents.list.path, async (req, res) => {
     const incidents = await storage.getIncidents();
