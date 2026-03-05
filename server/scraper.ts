@@ -144,8 +144,11 @@ export async function fetchPoliceIncidents(): Promise<InsertIncident[]> {
 }
 
 export async function syncData(storage: any) {
-  const fire = await fetchFireIncidents();
-  const police = await fetchPoliceIncidents();
+  // Fetch in parallel to save time
+  const [fire, police] = await Promise.all([
+    fetchFireIncidents(),
+    fetchPoliceIncidents()
+  ]);
   
   const all = [...fire, ...police];
   const incomingIds = new Set(all.map(inc => inc.incidentNo));
@@ -157,19 +160,26 @@ export async function syncData(storage: any) {
   }
 
   let synced = 0;
-  for (const inc of all) {
+  // Use Promise.all for database upserts to run them in parallel
+  await Promise.all(all.map(async (inc) => {
     try {
       await storage.upsertIncident(inc);
       synced++;
     } catch (e) {
       console.error('Error upserting incident:', e);
     }
-  }
+  }));
   
   lastSyncTime = new Date();
   console.log(`Synced ${synced} incidents at ${lastSyncTime.toISOString()}`);
 
-  geocodePendingIncidents(storage).catch(e => console.error('Geocoding pass error:', e));
+  // Only run geocoding pass if it's not already running
+  if (!(global as any).isGeocoding) {
+    (global as any).isGeocoding = true;
+    geocodePendingIncidents(storage)
+      .catch(e => console.error('Geocoding pass error:', e))
+      .finally(() => (global as any).isGeocoding = false);
+  }
 
   return { success: true, count: synced };
 }

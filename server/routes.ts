@@ -12,9 +12,10 @@ export async function registerRoutes(
   
   syncData(storage).catch(console.error);
   
+  // Sync every 15 seconds for more real-time updates
   setInterval(() => {
     syncData(storage).catch(console.error);
-  }, 30000);
+  }, 15000);
 
   app.get(api.incidents.list.path, async (req, res) => {
     const incidents = await storage.getIncidents();
