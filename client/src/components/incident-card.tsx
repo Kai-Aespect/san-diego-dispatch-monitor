@@ -66,7 +66,10 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
 
   return (
     <Card
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       className={cn(
         "cursor-pointer transition-all duration-200 overflow-hidden relative group border-white/5",
         isSelected

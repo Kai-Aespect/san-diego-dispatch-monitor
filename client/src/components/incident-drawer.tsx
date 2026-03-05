@@ -309,7 +309,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
             </div>
           </TabsContent>
 
-          <TabsContent value="history" className="p-6 pt-4">
+          <TabsContent value="history" className="p-6 pt-4 pb-20">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Log</h4>
               <button onClick={() => refetchHistory()} className="text-muted-foreground hover:text-foreground transition-colors">

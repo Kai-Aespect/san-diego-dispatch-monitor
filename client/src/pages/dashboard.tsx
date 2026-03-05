@@ -86,14 +86,14 @@ function ResizeHandle({ onMouseDown, className }: { onMouseDown: (e: React.Mouse
     <div
       onMouseDown={onMouseDown}
       className={cn(
-        "relative flex-none w-2 h-full cursor-col-resize group z-10 select-none",
+        "relative flex-none w-3 h-full cursor-col-resize group z-10 select-none hover:bg-primary/5 active:bg-primary/10 transition-colors",
         className
       )}
     >
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-px h-full bg-white/5 group-hover:bg-primary/30 group-active:bg-primary/50 transition-colors" />
+        <div className="w-px h-full bg-white/10 group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
       </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-10 rounded-full bg-white/10 group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-12 rounded-full bg-white/20 group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors shadow-sm" />
     </div>
   );
 }
@@ -198,7 +198,6 @@ export default function Dashboard() {
   const handleIncidentClick = (incident: IncidentListResponse[0]) => {
     setSelectedIncidentId(incident.id);
     setIsDrawerOpen(true);
-    setMobileView("list");
   };
 
   const handleUnitClick = (e: React.MouseEvent, unit: string) => {

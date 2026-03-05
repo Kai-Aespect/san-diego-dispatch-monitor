@@ -106,6 +106,17 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
 
   const selectedPos = selectedIncident ? getPosition(selectedIncident) : null;
 
+  useEffect(() => {
+    if (mapRef.current) {
+      const resizeObserver = new ResizeObserver(() => {
+        mapRef.current?.invalidateSize();
+      });
+      const container = mapRef.current.getContainer();
+      resizeObserver.observe(container);
+      return () => resizeObserver.disconnect();
+    }
+  }, []);
+
   return (
     <div className="w-full h-full relative overflow-hidden z-0">
       <MapContainer
