@@ -6,55 +6,105 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
 import { UnitDialog } from "@/components/unit-dialog";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
-import { AlertTriangle, Map as MapIcon, List, Filter } from "lucide-react";
+import { AlertTriangle, Map as MapIcon, List, CheckCheck } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Toggle } from "@/components/ui/toggle";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type IncidentListResponse } from "@shared/routes";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+type FilterMode =
+  | "all"
+  | "major"
+  | "medical"
+  | "fire_calls"
+  | "traffic"
+  | "new_updated"
+  | "has_notes"
+  | "no_units";
 
 export default function Dashboard() {
-  const { data: incidents = [], isLoading, error } = useIncidents();
+  const { data: incidents = [], isLoading } = useIncidents();
   const { data: status } = useStatus();
 
-  // State
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-  const [showMajorOnly, setShowMajorOnly] = useState(false);
-  
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [isAckingAll, setIsAckingAll] = useState(false);
+
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  
+
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false);
 
-  // Responsive view toggle for mobile
-  const [mobileView, setMobileView] = useState<'list'|'map'>('list');
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
 
-  // Filtering & Sorting Logic
+  const priorityCount = useMemo(() => incidents.filter(i => {
+    const isNew = !i.acknowledged && differenceInMinutes(new Date(), new Date(i.time)) < 15;
+    const isUpdated = !i.acknowledged && !isNew && differenceInMinutes(new Date(), new Date(i.lastUpdated)) < 5;
+    return isNew || isUpdated;
+  }).length, [incidents]);
+
+  const handleAcknowledgeAll = async () => {
+    setIsAckingAll(true);
+    try {
+      await apiRequest("POST", "/api/incidents/acknowledge-all", {});
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
+    } catch (e) {
+      console.error("Acknowledge all failed", e);
+    } finally {
+      setIsAckingAll(false);
+    }
+  };
+
   const filteredIncidents = useMemo(() => {
     return incidents.filter(incident => {
-      // Tab filter
       if (activeTab === "fire" && incident.agency.toLowerCase() !== "fire") return false;
       if (activeTab === "police" && incident.agency.toLowerCase() !== "police") return false;
-      
-      // Major filter
-      if (showMajorOnly && !incident.isMajor) return false;
 
-      // Search filter (global)
       if (search) {
         const q = search.toLowerCase();
         const matchesUnit = incident.units?.some(u => u.toLowerCase().includes(q));
-        const matchesText = 
+        const matchesText =
           incident.incidentNo.toLowerCase().includes(q) ||
           incident.callType.toLowerCase().includes(q) ||
           incident.location.toLowerCase().includes(q) ||
           incident.neighborhood?.toLowerCase().includes(q);
-        
         if (!matchesUnit && !matchesText) return false;
+      }
+
+      switch (filterMode) {
+        case "major":
+          if (!incident.isMajor) return false;
+          break;
+        case "medical":
+          if (incident.callTypeFamily !== "Medical") return false;
+          break;
+        case "fire_calls":
+          if (incident.agency !== "fire" || incident.callTypeFamily === "Medical") return false;
+          break;
+        case "traffic":
+          if (!incident.callTypeFamily?.toLowerCase().includes("traffic") &&
+              !incident.callType?.toLowerCase().includes("traffic") &&
+              !incident.callType?.toLowerCase().includes("accident")) return false;
+          break;
+        case "new_updated": {
+          const isNew = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.time)) < 15;
+          const isUpdated = !incident.acknowledged && !isNew && differenceInMinutes(new Date(), new Date(incident.lastUpdated)) < 5;
+          if (!isNew && !isUpdated) return false;
+          break;
+        }
+        case "has_notes":
+          if (!incident.notes && (!incident.tags || incident.tags.length === 0)) return false;
+          break;
+        case "no_units":
+          if (incident.units && incident.units.length > 0) return false;
+          break;
       }
 
       return true;
     }).sort((a, b) => {
-      // Helper to determine if an incident is "New" or "Updated" (mirrors logic in card)
       const isNewA = !a.acknowledged && differenceInMinutes(new Date(), new Date(a.time)) < 15;
       const isUpdatedA = !a.acknowledged && !isNewA && differenceInMinutes(new Date(), new Date(a.lastUpdated)) < 5;
       const isPriorityA = isNewA || isUpdatedA;
@@ -63,20 +113,15 @@ export default function Dashboard() {
       const isUpdatedB = !b.acknowledged && !isNewB && differenceInMinutes(new Date(), new Date(b.lastUpdated)) < 5;
       const isPriorityB = isNewB || isUpdatedB;
 
-      // 1. Priority (NEW/UPDATED and NOT acknowledged) first
       if (isPriorityA && !isPriorityB) return -1;
       if (!isPriorityA && isPriorityB) return 1;
-
-      // 2. Major incidents (if not in priority block)
       if (a.isMajor && !b.isMajor) return -1;
       if (!a.isMajor && b.isMajor) return 1;
-
-      // 3. Most recent by timestamp
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [incidents, activeTab, showMajorOnly, search]);
+  }, [incidents, activeTab, filterMode, search]);
 
-  const selectedIncident = useMemo(() => 
+  const selectedIncident = useMemo(() =>
     incidents.find(i => i.id === selectedIncidentId) || null
   , [incidents, selectedIncidentId]);
 
@@ -92,7 +137,6 @@ export default function Dashboard() {
     setIsUnitDialogOpen(true);
   };
 
-  // Loading State
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -108,7 +152,6 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
       <DashboardHeader search={search} setSearch={setSearch} incidents={incidents} />
 
-      {/* Stale Data Warning */}
       {status?.isStale && (
         <div className="bg-destructive/90 text-destructive-foreground px-4 py-2 text-sm font-medium flex items-center justify-center shadow-lg z-[60]">
           <AlertTriangle className="w-4 h-4 mr-2 animate-bounce" />
@@ -117,11 +160,10 @@ export default function Dashboard() {
       )}
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-[1920px] mx-auto w-full">
-        
-        {/* Left Panel: List & Controls */}
+
         <div className={`w-full lg:w-[450px] xl:w-[500px] flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'}`}>
-          
-          <div className="p-4 space-y-4 border-b border-white/5 bg-card/30 z-10">
+
+          <div className="p-4 space-y-3 border-b border-white/5 bg-card/30 z-10">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
                 <TabsTrigger value="all" className="font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
@@ -130,20 +172,40 @@ export default function Dashboard() {
               </TabsList>
             </Tabs>
 
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-mono text-muted-foreground">
-                <span className="text-foreground font-bold">{filteredIncidents.length}</span> active
-              </div>
-              <Toggle 
-                pressed={showMajorOnly} 
-                onPressedChange={setShowMajorOnly}
-                variant="outline"
-                size="sm"
-                className="h-8 border-white/10 data-[state=on]:bg-destructive/20 data-[state=on]:text-destructive-foreground data-[state=on]:border-destructive/50"
-              >
-                <Filter className="w-3 h-3 mr-2" />
-                Major Only
-              </Toggle>
+            <div className="flex items-center gap-2">
+              <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
+                <SelectTrigger className="flex-1 h-8 text-xs bg-black/30 border-white/10" data-testid="filter-select">
+                  <SelectValue placeholder="Filter..." />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-white/10">
+                  <SelectItem value="all">All Incidents</SelectItem>
+                  <SelectItem value="new_updated">🔴 New / Updated</SelectItem>
+                  <SelectItem value="major">⚠️ Major Incidents</SelectItem>
+                  <SelectItem value="medical">🟢 Medical Calls</SelectItem>
+                  <SelectItem value="fire_calls">🔥 Fire Calls Only</SelectItem>
+                  <SelectItem value="traffic">🚗 Traffic / Accidents</SelectItem>
+                  <SelectItem value="has_notes">📝 Has Notes or Tags</SelectItem>
+                  <SelectItem value="no_units">❓ No Units Assigned</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {priorityCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 text-xs border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap"
+                  onClick={handleAcknowledgeAll}
+                  disabled={isAckingAll}
+                  data-testid="button-acknowledge-all"
+                >
+                  <CheckCheck className="w-3.5 h-3.5 mr-1" />
+                  Ack All ({priorityCount})
+                </Button>
+              )}
+            </div>
+
+            <div className="text-xs font-mono text-muted-foreground">
+              Showing <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.length}</span> incidents
             </div>
           </div>
 
@@ -153,13 +215,13 @@ export default function Dashboard() {
                 <div className="w-16 h-16 rounded-full bg-accent/50 flex items-center justify-center">
                   <AlertTriangle className="w-8 h-8 opacity-50" />
                 </div>
-                <p>No active incidents matching your filters.</p>
+                <p>No incidents matching your filters.</p>
               </div>
             ) : (
               filteredIncidents.map(incident => (
-                <IncidentCard 
-                  key={incident.id} 
-                  incident={incident} 
+                <IncidentCard
+                  key={incident.id}
+                  incident={incident}
                   isSelected={selectedIncidentId === incident.id}
                   onClick={() => handleIncidentClick(incident)}
                   onUnitClick={handleUnitClick}
@@ -169,25 +231,23 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right Panel: Map */}
         <div className={`flex-1 relative h-full bg-slate-950 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
-          <IncidentMap 
+          <IncidentMap
             incidents={filteredIncidents}
             selectedId={selectedIncidentId}
             onSelectIncident={handleIncidentClick}
           />
         </div>
 
-        {/* Mobile View Toggle */}
         <div className="lg:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[500]">
           <div className="bg-card/90 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-2xl flex items-center">
-            <button 
+            <button
               onClick={() => setMobileView('list')}
               className={`px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${mobileView === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
             >
               <List className="w-4 h-4" /> List
             </button>
-            <button 
+            <button
               onClick={() => setMobileView('map')}
               className={`px-6 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${mobileView === 'map' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
             >
@@ -198,16 +258,15 @@ export default function Dashboard() {
 
       </main>
 
-      {/* Drawers and Dialogs */}
-      <IncidentDrawer 
-        incident={selectedIncident} 
-        isOpen={isDrawerOpen} 
+      <IncidentDrawer
+        incident={selectedIncident}
+        isOpen={isDrawerOpen}
         onOpenChange={(open) => {
           setIsDrawerOpen(open);
           if (!open) setSelectedIncidentId(null);
-        }} 
+        }}
       />
-      
+
       <UnitDialog
         unit={selectedUnit}
         isOpen={isUnitDialogOpen}
@@ -217,7 +276,7 @@ export default function Dashboard() {
         }}
         allIncidents={incidents}
       />
-      
+
     </div>
   );
 }

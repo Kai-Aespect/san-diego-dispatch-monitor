@@ -10,10 +10,8 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Trigger initial sync in background
   syncData(storage).catch(console.error);
   
-  // Also set up an interval to sync every 30 seconds
   setInterval(() => {
     syncData(storage).catch(console.error);
   }, 30000);
@@ -34,6 +32,25 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.incidents.acknowledgeAll.path, async (req, res) => {
+    try {
+      await storage.acknowledgeAll();
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get(api.incidents.history.path, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const history = await storage.getIncidentHistory(id);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post(api.incidents.sync.path, async (req, res) => {
     try {
       await syncData(storage);
@@ -44,7 +61,7 @@ export async function registerRoutes(
   });
 
   app.get(api.status.get.path, async (req, res) => {
-    const isStale = new Date().getTime() - lastSyncTime.getTime() > 60000; // > 1 minute
+    const isStale = new Date().getTime() - lastSyncTime.getTime() > 60000;
     res.json({ lastUpdated: lastSyncTime.toISOString(), isStale });
   });
 

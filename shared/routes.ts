@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { incidents, insertIncidentSchema } from './schema';
+import { incidents, incidentHistory, insertIncidentSchema } from './schema';
 
 export const errorSchemas = {
   internal: z.object({
@@ -34,7 +34,21 @@ export const api = {
       responses: {
         200: z.custom<typeof incidents.$inferSelect>(),
       }
-    }
+    },
+    acknowledgeAll: {
+      method: 'POST' as const,
+      path: '/api/incidents/acknowledge-all' as const,
+      responses: {
+        200: z.object({ success: z.boolean() })
+      }
+    },
+    history: {
+      method: 'GET' as const,
+      path: '/api/incidents/:id/history' as const,
+      responses: {
+        200: z.array(z.custom<typeof incidentHistory.$inferSelect>()),
+      }
+    },
   },
   status: {
     get: {
@@ -62,3 +76,4 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
 export type IncidentListResponse = z.infer<typeof api.incidents.list.responses[200]>;
 export type SyncResponse = z.infer<typeof api.incidents.sync.responses[200]>;
 export type StatusResponse = z.infer<typeof api.status.get.responses[200]>;
+export type IncidentHistoryResponse = z.infer<typeof api.incidents.history.responses[200]>;

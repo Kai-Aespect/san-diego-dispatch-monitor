@@ -2,11 +2,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { type IncidentListResponse } from "@shared/routes";
-import { MapPin, Shield, Flame, Activity, Clock, Copy, Navigation, Plus, X } from "lucide-react";
-import { format } from "date-fns";
+import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
@@ -16,23 +18,54 @@ interface IncidentDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface HistoryEntry {
+  id: number;
+  incidentId: number;
+  changedAt: string;
+  source: string;
+  summary: string;
+  changes: Array<{ field: string; oldValue: string; newValue: string }>;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  units: "Units",
+  status: "Status",
+  callType: "Call Type",
+  isMajor: "Major",
+  location: "Location",
+  notes: "Notes",
+  tags: "Tags",
+  acknowledged: "Acknowledged",
+};
+
 export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawerProps) {
   const { toast } = useToast();
   const [notes, setNotes] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("details");
 
   const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
+
+  const { data: history = [], refetch: refetchHistory } = useQuery<HistoryEntry[]>({
+    queryKey: ["/api/incidents", incident?.id, "history"],
+    queryFn: async () => {
+      if (!incident) return [];
+      const res = await fetch(`/api/incidents/${incident.id}/history`);
+      return res.json();
+    },
+    enabled: !!incident && isOpen,
+    refetchInterval: 30000,
+  });
 
   useEffect(() => {
     if (incident) {
       setNotes(incident.notes || "");
       setTags(incident.tags || []);
     }
-  }, [incident]);
+  }, [incident?.id]);
 
-  // Auto-save logic
   useEffect(() => {
     if (!incident || !isOpen) return;
     const timer = setTimeout(() => {
@@ -50,9 +83,10 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     setIsSaving(true);
     try {
       await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags });
-      queryClient.setQueryData(["/api/incidents"], (old: any) => 
+      queryClient.setQueryData(["/api/incidents"], (old: any) =>
         old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
       );
+      refetchHistory();
     } catch (e) {
       console.error("Auto-save failed", e);
     } finally {
@@ -68,10 +102,8 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     }
   };
 
-  const removeTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
-  };
-  
+  const removeTag = (tag: string) => setTags(tags.filter(t => t !== tag));
+
   const isFire = incident.agency.toLowerCase() === 'fire';
   const agencyIcon = isFire ? <Flame className="w-5 h-5" /> : <Shield className="w-5 h-5" />;
   const agencyColor = isFire ? "text-red-400 bg-red-500/10" : "text-blue-400 bg-blue-500/10";
@@ -79,18 +111,16 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const handleCopyAddress = () => {
     const fullLocation = `${incident.location}${incident.crossStreets ? ` (Cross: ${incident.crossStreets})` : ''}, San Diego, CA`;
     navigator.clipboard.writeText(fullLocation);
-    toast({
-      title: "Address Copied",
-      description: "Full location details copied to clipboard.",
-      duration: 2000,
-    });
+    toast({ title: "Address Copied", description: "Full location details copied to clipboard.", duration: 2000 });
   };
 
   const openGoogleMaps = () => {
-    const fullLocation = `${incident.location} and ${incident.crossStreets || ''}, San Diego, CA`;
-    let url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullLocation)}`;
+    let url: string;
     if (incident.lat && incident.lng) {
       url = `https://www.google.com/maps/search/?api=1&query=${incident.lat},${incident.lng}`;
+    } else {
+      const q = encodeURIComponent(`${incident.location}${incident.crossStreets ? ' and ' + incident.crossStreets : ''}, San Diego, CA`);
+      url = `https://www.google.com/maps/search/?api=1&query=${q}`;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -99,119 +129,75 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto bg-card border-l-white/10 p-0 z-[100]">
         <div className={`h-2 w-full ${isFire ? 'bg-gradient-to-r from-red-600 to-red-400' : 'bg-gradient-to-r from-blue-600 to-blue-400'}`} />
-        
-        <div className="p-6">
-          <SheetHeader className="mb-6">
+
+        <div className="p-6 pb-2">
+          <SheetHeader className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <Badge variant="outline" className={`font-mono border-white/10 ${agencyColor}`}>
                 {agencyIcon}
                 <span className="ml-1.5 uppercase tracking-widest">{incident.agency}</span>
               </Badge>
               <div className="flex items-center gap-2">
-                {isSaving && <span className="text-[10px] text-primary animate-pulse font-mono uppercase">Auto-Saving...</span>}
+                {isSaving && <span className="text-[10px] text-primary animate-pulse font-mono uppercase">Saving...</span>}
                 <span className="text-sm font-mono text-muted-foreground bg-accent px-2 py-1 rounded-md">
                   #{incident.incidentNo}
                 </span>
               </div>
             </div>
-            <SheetTitle className="text-3xl font-display font-bold leading-tight mt-4">
+            <SheetTitle className="text-2xl font-display font-bold leading-tight mt-3">
               {incident.callType}
             </SheetTitle>
-            <SheetDescription className="flex items-center gap-2 text-base mt-2">
+            <SheetDescription className="flex items-center gap-2 text-base mt-1">
               <Clock className="w-4 h-4 text-primary" />
               <span className="font-mono text-foreground">{format(new Date(incident.time), "PPpp")}</span>
             </SheetDescription>
           </SheetHeader>
+        </div>
 
-          <div className="space-y-6">
-            {/* Notes & Tags Section */}
-            <div className="space-y-4 bg-accent/20 p-4 rounded-xl border border-white/5">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Incident Notes</label>
-                <Textarea 
-                  value={notes} 
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Type notes here... changes auto-save"
-                  className="bg-background/50 border-white/10 min-h-[100px] text-sm focus-visible:ring-primary/30"
-                />
-              </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="px-6">
+            <TabsList className="w-full bg-black/30 border border-white/5">
+              <TabsTrigger value="details" className="flex-1 text-xs">Details</TabsTrigger>
+              <TabsTrigger value="notes" className="flex-1 text-xs">Notes & Tags</TabsTrigger>
+              <TabsTrigger value="history" className="flex-1 text-xs flex items-center gap-1">
+                <History className="w-3 h-3" />
+                History {history.length > 0 && <span className="bg-primary/20 text-primary rounded-full px-1.5 text-[9px] font-bold">{history.length}</span>}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Tags</label>
-                
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {defaultTags.map(tag => (
-                    <button 
-                      key={tag}
-                      onClick={() => addTag(tag)}
-                      disabled={tags.includes(tag)}
-                      className={cn(
-                        "text-[10px] px-2 py-1 rounded-full border transition-all",
-                        tags.includes(tag) 
-                          ? "bg-primary/20 border-primary/40 text-primary opacity-50" 
-                          : "bg-background/50 border-white/10 text-muted-foreground hover:border-primary/50 hover:text-primary"
-                      )}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {tags.map(tag => (
-                    <Badge key={tag} className="bg-primary/20 text-primary border-primary/30 flex items-center gap-1 pr-1">
-                      {tag}
-                      <button onClick={() => removeTag(tag)} className="hover:text-destructive p-0.5 rounded-full hover:bg-destructive/10"><X size={10} /></button>
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input 
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addTag(tagInput)}
-                    placeholder="Custom tag..."
-                    className="flex-1 bg-background/50 border border-white/10 rounded-md px-3 py-1.5 text-sm outline-none focus:border-primary/50"
-                  />
-                  <Button size="icon" variant="outline" onClick={() => addTag(tagInput)} className="h-9 w-9 border-white/10 hover:bg-white/5"><Plus size={16} /></Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Location Section */}
+          <TabsContent value="details" className="p-6 pt-4 space-y-5">
+            {/* Location */}
             <div className="bg-accent/40 rounded-xl p-4 border border-white/5">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Location Details</h4>
-              
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Location</h4>
               <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 bg-background rounded-lg text-primary shadow-inner">
+                <div className="p-2 bg-background rounded-lg text-primary shadow-inner shrink-0">
                   <MapPin className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="font-bold text-lg text-foreground">{incident.location}</div>
                   {incident.crossStreets && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      <span className="opacity-50 mr-1">Cross:</span> {incident.crossStreets}
-                    </div>
+                    <div className="text-sm text-muted-foreground mt-1"><span className="opacity-50 mr-1">Cross:</span>{incident.crossStreets}</div>
                   )}
                   {incident.neighborhood && (
-                    <div className="text-sm text-primary/80 mt-1 font-mono">
-                      {incident.neighborhood}
-                    </div>
+                    <div className="text-sm text-primary/80 mt-1 font-mono">{incident.neighborhood}</div>
+                  )}
+                  {incident.lat && incident.lng && (
+                    <div className="text-[10px] text-muted-foreground/50 mt-1 font-mono">{incident.lat.toFixed(5)}, {incident.lng.toFixed(5)}</div>
                   )}
                 </div>
               </div>
-
               <div className="flex gap-2">
-                <Button variant="secondary" size="sm" className="flex-1 hover-elevate" onClick={handleCopyAddress}>
+                <Button variant="secondary" size="sm" className="flex-1" onClick={handleCopyAddress}>
                   <Copy className="w-4 h-4 mr-2" /> Copy
                 </Button>
-                <Button variant="default" size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 hover-elevate" onClick={openGoogleMaps}>
+                <Button variant="default" size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90" onClick={openGoogleMaps}>
                   <Navigation className="w-4 h-4 mr-2" /> Maps
                 </Button>
               </div>
             </div>
 
-            {/* Units Section */}
+            {/* Units */}
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Assigned Units ({incident.units?.length || 0})</h4>
               {incident.units && incident.units.length > 0 ? (
@@ -228,18 +214,125 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                 </div>
               )}
             </div>
-            
-            {/* Status Section */}
+
+            {/* Status */}
             {incident.status && (
               <div>
-                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status</h4>
-                 <Badge variant="outline" className="text-sm py-1 border-white/20 bg-background/50">
-                   {incident.status}
-                 </Badge>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status</h4>
+                <Badge variant="outline" className="text-sm py-1 border-white/20 bg-background/50">{incident.status}</Badge>
               </div>
             )}
-          </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="notes" className="p-6 pt-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Incident Notes</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Type notes here... changes auto-save"
+                className="bg-background/50 border-white/10 min-h-[120px] text-sm focus-visible:ring-primary/30"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Quick Tags</label>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {defaultTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => addTag(tag)}
+                    disabled={tags.includes(tag)}
+                    className={cn(
+                      "text-[10px] px-2 py-1 rounded-full border transition-all",
+                      tags.includes(tag)
+                        ? "bg-primary/20 border-primary/40 text-primary opacity-50"
+                        : "bg-background/50 border-white/10 text-muted-foreground hover:border-primary/50 hover:text-primary"
+                    )}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {tags.map(tag => (
+                    <Badge key={tag} className="bg-primary/20 text-primary border-primary/30 flex items-center gap-1 pr-1">
+                      {tag}
+                      <button onClick={() => removeTag(tag)} className="hover:text-destructive p-0.5 rounded-full hover:bg-destructive/10"><X size={10} /></button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addTag(tagInput)}
+                  placeholder="Custom tag..."
+                  className="flex-1 bg-background/50 border border-white/10 rounded-md px-3 py-1.5 text-sm outline-none focus:border-primary/50"
+                />
+                <Button size="icon" variant="outline" onClick={() => addTag(tagInput)} className="h-9 w-9 border-white/10 hover:bg-white/5"><Plus size={16} /></Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="p-6 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Log</h4>
+              <button onClick={() => refetchHistory()} className="text-muted-foreground hover:text-foreground transition-colors">
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {history.length === 0 ? (
+              <div className="text-sm text-muted-foreground italic bg-accent/20 p-6 rounded-lg text-center border border-dashed border-white/10">
+                No history recorded yet
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {history.map((entry) => (
+                  <div key={entry.id} className="bg-accent/20 rounded-lg p-3 border border-white/5">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] h-4 px-1.5 border-0",
+                            entry.source === 'sync' ? "bg-blue-500/15 text-blue-400" : "bg-amber-500/15 text-amber-400"
+                          )}
+                        >
+                          {entry.source === 'sync' ? 'SYNC' : 'USER'}
+                        </Badge>
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {formatDistanceToNow(new Date(entry.changedAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-muted-foreground/40">
+                        {format(new Date(entry.changedAt), "HH:mm:ss")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground font-medium">{entry.summary}</p>
+                    {entry.changes && entry.changes.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {entry.changes.map((change, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
+                            <span className="text-primary/70">{FIELD_LABELS[change.field] || change.field}:</span>
+                            <span className="line-through opacity-50 max-w-[80px] truncate">{change.oldValue || 'empty'}</span>
+                            <ArrowRight className="w-2.5 h-2.5 shrink-0 text-primary/40" />
+                            <span className="text-foreground/80 max-w-[100px] truncate">{change.newValue || 'empty'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );
