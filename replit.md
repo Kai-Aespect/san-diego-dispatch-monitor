@@ -46,14 +46,16 @@ Preferred communication style: Simple, everyday language.
 - **Bookmarks**: `use-bookmarks.ts` + localStorage; bookmark any call, view in "Tracked" tab
 - **Settings**: `use-settings.ts` + localStorage; theme and volume controls
 
-### Layout (3-panel)
-- Left: Incidents list (420px fixed) with agency tabs, filter dropdown, archive toggle
+### Layout (3-panel, resizable)
+- Left: Incidents list (default 420px, min 240px, max 640px) with drag-handle resize
 - Middle: Map (flex-1, takes remaining space)
-- Right: Side panel (320px, collapsible) with tabs:
-  - **Tracked** — Bookmarked calls, live data
-  - **My Notes** — Personal notes (localStorage only, per-browser)
-  - **Info** — Admin board with PIN-protected edit (PIN: 3232), cards visible to all
-  - **Settings** — Theme (dark/light) and audio alert toggle
+- Right: Side panel (default 320px, min 48px, max 520px) with drag-handle resize
+  - Auto-collapses to icon-only mode when width < 100px
+  - Clicking any icon while collapsed re-expands to 320px
+  - Tabs: **Tracked**, **My Notes**, **Info**, **Settings**
+- Resize handles: 6px draggable dividers between panels, triggered by mouse drag
+- Local Notes: drag-to-reorder via @dnd-kit/core + @dnd-kit/sortable; GripVertical handles
+- Incident cards show `callTypeFamily` as monospace subtitle below `callType` when different
 
 ### Backend Architecture
 - **Framework**: Express.js on Node.js with TypeScript, run via `tsx`
@@ -95,6 +97,7 @@ Preferred communication style: Simple, everyday language.
 | `express` | HTTP server |
 | shadcn/ui + Radix UI | Accessible UI primitives |
 | Tailwind CSS | Utility-first styling |
+| `@dnd-kit/core` + `@dnd-kit/sortable` | Drag-to-reorder for local notes |
 
 ### Environment Variables
 - `DATABASE_URL` — Required. PostgreSQL connection string.

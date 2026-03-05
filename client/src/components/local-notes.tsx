@@ -1,13 +1,28 @@
 import { useState } from "react";
 import { useLocalNotes, type LocalNote } from "@/hooks/use-local-notes";
 import { type IncidentListResponse } from "@shared/routes";
-import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Radio, Search } from "lucide-react";
+import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Radio, Search, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface LocalNotesProps {
   incidents: IncidentListResponse;
@@ -27,11 +42,15 @@ const COLOR_MAP: Record<string, { bg: string; border: string; bar: string; text:
 const ALL_COLORS = Object.keys(COLOR_MAP);
 
 export function LocalNotes({ incidents }: LocalNotesProps) {
-  const { notes, createNote, updateNote, deleteNote, togglePin } = useLocalNotes();
+  const { notes, createNote, updateNote, deleteNote, togglePin, reorderNotes } = useLocalNotes();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showLinkPicker, setShowLinkPicker] = useState<string | null>(null);
   const [callSearch, setCallSearch] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const filtered = notes.filter(n =>
     !search ||
@@ -54,6 +73,16 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
     setEditingId(note.id);
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = filtered.findIndex(n => n.id === active.id);
+    const newIndex = filtered.findIndex(n => n.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(filtered, oldIndex, newIndex);
+    reorderNotes(reordered.map(n => n.id));
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 pt-4 pb-3 space-y-2 border-b border-white/5">
@@ -72,7 +101,7 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground font-mono">
-          {notes.length} personal note{notes.length !== 1 ? "s" : ""} · visible only to you
+          {notes.length} personal note{notes.length !== 1 ? "s" : ""} · visible only to you · drag to reorder
         </p>
       </div>
 
@@ -92,23 +121,27 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
           </div>
         )}
 
-        {filtered.map(note => (
-          <NoteCard
-            key={note.id}
-            note={note}
-            isEditing={editingId === note.id}
-            incidents={incidents}
-            onEdit={() => setEditingId(note.id)}
-            onSave={(updates) => { updateNote(note.id, updates); setEditingId(null); }}
-            onDelete={() => { deleteNote(note.id); if (editingId === note.id) setEditingId(null); }}
-            onTogglePin={() => togglePin(note.id)}
-            showLinkPicker={showLinkPicker === note.id}
-            onToggleLinkPicker={() => setShowLinkPicker(showLinkPicker === note.id ? null : note.id)}
-            filteredCalls={filteredCalls}
-            callSearch={callSearch}
-            onCallSearch={setCallSearch}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={filtered.map(n => n.id)} strategy={verticalListSortingStrategy}>
+            {filtered.map(note => (
+              <SortableNoteCard
+                key={note.id}
+                note={note}
+                isEditing={editingId === note.id}
+                incidents={incidents}
+                onEdit={() => setEditingId(note.id)}
+                onSave={(updates) => { updateNote(note.id, updates); setEditingId(null); }}
+                onDelete={() => { deleteNote(note.id); if (editingId === note.id) setEditingId(null); }}
+                onTogglePin={() => togglePin(note.id)}
+                showLinkPicker={showLinkPicker === note.id}
+                onToggleLinkPicker={() => setShowLinkPicker(showLinkPicker === note.id ? null : note.id)}
+                filteredCalls={filteredCalls}
+                callSearch={callSearch}
+                onCallSearch={setCallSearch}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
@@ -129,10 +162,22 @@ function ColorSwatch({ color, selected, onClick }: { color: string; selected: bo
   );
 }
 
-function NoteCard({
-  note, isEditing, incidents, onEdit, onSave, onDelete, onTogglePin,
-  showLinkPicker, onToggleLinkPicker, filteredCalls, callSearch, onCallSearch
-}: {
+function SortableNoteCard(props: NoteCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.note.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <NoteCard {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+interface NoteCardProps {
   note: LocalNote;
   isEditing: boolean;
   incidents: IncidentListResponse;
@@ -145,7 +190,14 @@ function NoteCard({
   filteredCalls: IncidentListResponse;
   callSearch: string;
   onCallSearch: (s: string) => void;
-}) {
+  dragHandleProps?: Record<string, unknown>;
+}
+
+function NoteCard({
+  note, isEditing, incidents, onEdit, onSave, onDelete, onTogglePin,
+  showLinkPicker, onToggleLinkPicker, filteredCalls, callSearch, onCallSearch,
+  dragHandleProps,
+}: NoteCardProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [color, setColor] = useState(note.color);
@@ -240,11 +292,19 @@ function NoteCard({
       <div className={cn("absolute left-0 top-0 bottom-0 w-1", colors.bar)} />
       <div className="pl-2">
         <div className="flex items-start justify-between mb-1">
-          <div className="flex items-center gap-1.5">
-            {note.pinned && <Pin className={cn("w-3 h-3", colors.text)} />}
-            <h4 className="text-sm font-bold text-foreground">{note.title}</h4>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span
+              {...dragHandleProps}
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground/30 hover:text-muted-foreground/70 cursor-grab active:cursor-grabbing transition-colors shrink-0 touch-none"
+              title="Drag to reorder"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </span>
+            {note.pinned && <Pin className={cn("w-3 h-3 shrink-0", colors.text)} />}
+            <h4 className="text-sm font-bold text-foreground truncate">{note.title}</h4>
           </div>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
             <button onClick={(e) => { e.stopPropagation(); onTogglePin(); }} className="p-0.5 text-muted-foreground hover:text-primary transition-colors">
               {note.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
             </button>

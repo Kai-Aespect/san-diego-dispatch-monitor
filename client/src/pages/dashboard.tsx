@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useIncidents, useStatus } from "@/hooks/use-incidents";
 import { useSettings } from "@/hooks/use-settings";
 import { IncidentCard } from "@/components/incident-card";
@@ -26,6 +26,74 @@ type FilterMode =
   | "has_notes"
   | "no_units";
 
+const MIN_LEFT = 240;
+const MAX_LEFT = 640;
+const DEFAULT_LEFT = 420;
+
+const MIN_RIGHT = 48;
+const MAX_RIGHT = 520;
+const DEFAULT_RIGHT = 320;
+const COLLAPSE_THRESHOLD = 100;
+
+function useResizeHandle(
+  initialWidth: number,
+  min: number,
+  max: number,
+  direction: "left" | "right" = "left"
+) {
+  const [width, setWidth] = useState(initialWidth);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(initialWidth);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = width;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [width]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = direction === "left"
+        ? e.clientX - startX.current
+        : startX.current - e.clientX;
+      const next = Math.max(min, Math.min(max, startWidth.current + delta));
+      setWidth(next);
+    };
+    const onMouseUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [min, max, direction]);
+
+  return { width, setWidth, onMouseDown };
+}
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="w-1.5 shrink-0 h-full relative group cursor-col-resize z-20 select-none"
+      title="Drag to resize"
+    >
+      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/5 group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-white/10 group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors" />
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: incidents = [], isLoading } = useIncidents();
   const { data: status } = useStatus();
@@ -44,6 +112,11 @@ export default function Dashboard() {
   const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false);
 
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
+
+  const leftResize = useResizeHandle(DEFAULT_LEFT, MIN_LEFT, MAX_LEFT, "left");
+  const rightResize = useResizeHandle(DEFAULT_RIGHT, MIN_RIGHT, MAX_RIGHT, "right");
+
+  const rightCollapsed = rightResize.width < COLLAPSE_THRESHOLD;
 
   const priorityCount = useMemo(() => incidents.filter(i => {
     const isNew = !i.acknowledged && differenceInMinutes(new Date(), new Date(i.time)) < 15;
@@ -173,105 +246,60 @@ export default function Dashboard() {
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-[1920px] mx-auto w-full">
 
-        {/* Left: Call list */}
-        <div className={`w-full lg:w-[420px] xl:w-[460px] flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'}`}>
-
-          <div className="p-4 space-y-3 border-b border-white/5 bg-card/30 z-10">
-            <div className="flex items-center justify-between gap-2">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
-                  <TabsTrigger value="all" className="font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
-                  <TabsTrigger value="fire" className="font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400">Fire/Med</TabsTrigger>
-                  <TabsTrigger value="police" className="font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">Police</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <Button
-                variant="outline"
-                size="sm"
-                className={`h-9 px-3 border-white/10 ${showArchived ? 'bg-primary/20 text-primary' : 'bg-black/40 text-muted-foreground'}`}
-                onClick={() => setShowArchived(!showArchived)}
-                title={showArchived ? "Show Active Calls" : "Show Completed Archive"}
-                data-testid="button-toggle-archive"
-              >
-                {showArchived ? <Activity className="w-4 h-4" /> : <History className="w-4 h-4" />}
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
-                <SelectTrigger className="flex-1 h-8 text-xs bg-black/30 border-white/10" data-testid="filter-select">
-                  <SelectValue placeholder="Filter..." />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-white/10">
-                  <SelectItem value="all">All Incidents</SelectItem>
-                  <SelectItem value="new_updated">🔴 New / Updated</SelectItem>
-                  <SelectItem value="major">⚠️ Major Incidents</SelectItem>
-                  <SelectItem value="medical">🟢 Medical Calls</SelectItem>
-                  <SelectItem value="fire_calls">🔥 Fire Calls Only</SelectItem>
-                  <SelectItem value="traffic">🚗 Traffic / Accidents</SelectItem>
-                  <SelectItem value="has_notes">📝 Has Notes or Tags</SelectItem>
-                  <SelectItem value="no_units">❓ No Units Assigned</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {priorityCount > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 px-2 text-xs border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap"
-                  onClick={handleAcknowledgeAll}
-                  disabled={isAckingAll}
-                  data-testid="button-acknowledge-all"
-                >
-                  <CheckCheck className="w-3.5 h-3.5 mr-1" />
-                  Ack All ({priorityCount})
-                </Button>
-              )}
-            </div>
-
-            <div className="text-xs font-mono text-muted-foreground flex justify-between">
-              <span>{showArchived ? "Completed Archive" : "Active Dispatch"}</span>
-              <span>
-                <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.filter(i => showArchived ? !i.active : i.active).length}</span>
-              </span>
-            </div>
+        {/* Left: Call list — fixed width on desktop, resizable */}
+        <div
+          className={`flex flex-col h-full border-r border-white/5 bg-background/50 ${mobileView === 'map' ? 'hidden lg:flex' : 'flex'} w-full`}
+          style={{ width: undefined }}
+        >
+          {/* On mobile this takes full width; on desktop use leftResize.width */}
+          <div
+            className="hidden lg:flex flex-col h-full"
+            style={{ width: leftResize.width, minWidth: MIN_LEFT, maxWidth: MAX_LEFT }}
+          >
+            <CallListContent
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              showArchived={showArchived}
+              setShowArchived={setShowArchived}
+              filterMode={filterMode}
+              setFilterMode={setFilterMode}
+              priorityCount={priorityCount}
+              isAckingAll={isAckingAll}
+              handleAcknowledgeAll={handleAcknowledgeAll}
+              filteredIncidents={filteredIncidents}
+              incidents={incidents}
+              selectedIncidentId={selectedIncidentId}
+              handleIncidentClick={handleIncidentClick}
+              handleUnitClick={handleUnitClick}
+            />
           </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar scroll-smooth">
-            {filteredIncidents.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8 text-center border-2 border-dashed border-white/5 rounded-xl">
-                <div className="w-16 h-16 rounded-full bg-accent/50 flex items-center justify-center">
-                  {activeTab === "police" && !showArchived
-                    ? <ShieldOff className="w-8 h-8 opacity-50" />
-                    : <AlertTriangle className="w-8 h-8 opacity-50" />
-                  }
-                </div>
-                {activeTab === "police" && !showArchived ? (
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground/60">No active police calls</p>
-                    <p className="text-xs text-muted-foreground/70 max-w-[220px]">
-                      The SDPD dispatch feed may be temporarily unavailable. Data will appear automatically when the source comes back online.
-                    </p>
-                  </div>
-                ) : (
-                  <p>No {showArchived ? "completed" : "active"} incidents found.</p>
-                )}
-              </div>
-            ) : (
-              filteredIncidents.map(incident => (
-                <IncidentCard
-                  key={incident.id}
-                  incident={incident}
-                  isSelected={selectedIncidentId === incident.id}
-                  onClick={() => handleIncidentClick(incident)}
-                  onUnitClick={handleUnitClick}
-                />
-              ))
-            )}
+          {/* Mobile: full width */}
+          <div className="lg:hidden flex flex-col h-full w-full">
+            <CallListContent
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              showArchived={showArchived}
+              setShowArchived={setShowArchived}
+              filterMode={filterMode}
+              setFilterMode={setFilterMode}
+              priorityCount={priorityCount}
+              isAckingAll={isAckingAll}
+              handleAcknowledgeAll={handleAcknowledgeAll}
+              filteredIncidents={filteredIncidents}
+              incidents={incidents}
+              selectedIncidentId={selectedIncidentId}
+              handleIncidentClick={handleIncidentClick}
+              handleUnitClick={handleUnitClick}
+            />
           </div>
         </div>
 
-        {/* Middle: Map (smaller) */}
+        {/* Resize handle: left ↔ map */}
+        <div className={`hidden lg:block h-full`}>
+          <ResizeHandle onMouseDown={leftResize.onMouseDown} />
+        </div>
+
+        {/* Middle: Map */}
         <div className={`flex-1 relative h-full bg-slate-950 min-w-0 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
           <IncidentMap
             incidents={filteredIncidents}
@@ -280,9 +308,22 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Right: Side Panel (hidden on mobile) */}
-        <div className="hidden lg:flex h-full">
-          <SidePanel incidents={incidents} onSelectIncident={handleIncidentClick} />
+        {/* Resize handle: map ↔ right */}
+        <div className="hidden lg:block h-full">
+          <ResizeHandle onMouseDown={rightResize.onMouseDown} />
+        </div>
+
+        {/* Right: Side Panel */}
+        <div
+          className="hidden lg:flex h-full"
+          style={{ width: rightResize.width, minWidth: MIN_RIGHT, maxWidth: MAX_RIGHT }}
+        >
+          <SidePanel
+            incidents={incidents}
+            onSelectIncident={handleIncidentClick}
+            collapsed={rightCollapsed}
+            onExpand={() => rightResize.setWidth(DEFAULT_RIGHT)}
+          />
         </div>
 
         {/* Mobile toggle */}
@@ -325,5 +366,126 @@ export default function Dashboard() {
       />
 
     </div>
+  );
+}
+
+interface CallListContentProps {
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  showArchived: boolean;
+  setShowArchived: (v: boolean) => void;
+  filterMode: FilterMode;
+  setFilterMode: (v: FilterMode) => void;
+  priorityCount: number;
+  isAckingAll: boolean;
+  handleAcknowledgeAll: () => void;
+  filteredIncidents: IncidentListResponse;
+  incidents: IncidentListResponse;
+  selectedIncidentId: number | null;
+  handleIncidentClick: (inc: IncidentListResponse[0]) => void;
+  handleUnitClick: (e: React.MouseEvent, unit: string) => void;
+}
+
+function CallListContent({
+  activeTab, setActiveTab, showArchived, setShowArchived,
+  filterMode, setFilterMode, priorityCount, isAckingAll, handleAcknowledgeAll,
+  filteredIncidents, incidents, selectedIncidentId, handleIncidentClick, handleUnitClick,
+}: CallListContentProps) {
+  return (
+    <>
+      <div className="p-4 space-y-3 border-b border-white/5 bg-card/30 z-10">
+        <div className="flex items-center justify-between gap-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+            <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
+              <TabsTrigger value="all" className="font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
+              <TabsTrigger value="fire" className="font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400">Fire/Med</TabsTrigger>
+              <TabsTrigger value="police" className="font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">Police</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`h-9 px-3 border-white/10 ${showArchived ? 'bg-primary/20 text-primary' : 'bg-black/40 text-muted-foreground'}`}
+            onClick={() => setShowArchived(!showArchived)}
+            title={showArchived ? "Show Active Calls" : "Show Completed Archive"}
+            data-testid="button-toggle-archive"
+          >
+            {showArchived ? <Activity className="w-4 h-4" /> : <History className="w-4 h-4" />}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
+            <SelectTrigger className="flex-1 h-8 text-xs bg-black/30 border-white/10" data-testid="filter-select">
+              <SelectValue placeholder="Filter..." />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-white/10">
+              <SelectItem value="all">All Incidents</SelectItem>
+              <SelectItem value="new_updated">🔴 New / Updated</SelectItem>
+              <SelectItem value="major">⚠️ Major Incidents</SelectItem>
+              <SelectItem value="medical">🟢 Medical Calls</SelectItem>
+              <SelectItem value="fire_calls">🔥 Fire Calls Only</SelectItem>
+              <SelectItem value="traffic">🚗 Traffic / Accidents</SelectItem>
+              <SelectItem value="has_notes">📝 Has Notes or Tags</SelectItem>
+              <SelectItem value="no_units">❓ No Units Assigned</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {priorityCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2 text-xs border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap"
+              onClick={handleAcknowledgeAll}
+              disabled={isAckingAll}
+              data-testid="button-acknowledge-all"
+            >
+              <CheckCheck className="w-3.5 h-3.5 mr-1" />
+              Ack All ({priorityCount})
+            </Button>
+          )}
+        </div>
+
+        <div className="text-xs font-mono text-muted-foreground flex justify-between">
+          <span>{showArchived ? "Completed Archive" : "Active Dispatch"}</span>
+          <span>
+            <span className="text-foreground font-bold">{filteredIncidents.length}</span> of <span className="text-foreground font-bold">{incidents.filter(i => showArchived ? !i.active : i.active).length}</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar scroll-smooth">
+        {filteredIncidents.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8 text-center border-2 border-dashed border-white/5 rounded-xl">
+            <div className="w-16 h-16 rounded-full bg-accent/50 flex items-center justify-center">
+              {activeTab === "police" && !showArchived
+                ? <ShieldOff className="w-8 h-8 opacity-50" />
+                : <AlertTriangle className="w-8 h-8 opacity-50" />
+              }
+            </div>
+            {activeTab === "police" && !showArchived ? (
+              <div className="space-y-1">
+                <p className="font-medium text-foreground/60">No active police calls</p>
+                <p className="text-xs text-muted-foreground/70 max-w-[220px]">
+                  The SDPD dispatch feed may be temporarily unavailable. Data will appear automatically when the source comes back online.
+                </p>
+              </div>
+            ) : (
+              <p>No {showArchived ? "completed" : "active"} incidents found.</p>
+            )}
+          </div>
+        ) : (
+          filteredIncidents.map(incident => (
+            <IncidentCard
+              key={incident.id}
+              incident={incident}
+              isSelected={selectedIncidentId === incident.id}
+              onClick={() => handleIncidentClick(incident)}
+              onUnitClick={handleUnitClick}
+            />
+          ))
+        )}
+      </div>
+    </>
   );
 }

@@ -137,9 +137,14 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
           </div>
         </div>
 
-        <h3 className="font-display font-bold text-base leading-tight mb-1 text-foreground group-hover:text-primary transition-colors">
+        <h3 className="font-display font-bold text-base leading-tight mb-0.5 text-foreground group-hover:text-primary transition-colors">
           {incident.callType}
         </h3>
+        {incident.callTypeFamily && incident.callTypeFamily !== incident.callType && (
+          <p className="text-[11px] text-muted-foreground/70 font-mono mb-1 leading-none">
+            {incident.callTypeFamily}{incident.neighborhood ? ` · ${incident.neighborhood}` : ""}
+          </p>
+        )}
 
         <div className="flex items-start gap-1.5 text-sm text-muted-foreground mb-3">
           <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
