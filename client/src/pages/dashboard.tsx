@@ -9,9 +9,10 @@ import { UnitDialog } from "@/components/unit-dialog";
 import { SidePanel } from "@/components/side-panel";
 import { AudioNotifier } from "@/components/audio-notifier";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
-import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff } from "lucide-react";
+import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff, Menu } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type IncidentListResponse } from "@shared/routes";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -287,7 +288,7 @@ export default function Dashboard() {
         </div>
 
         {/* Mobile toggle pill */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500]">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] flex items-center gap-2">
           <div className="bg-card/90 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-2xl flex items-center">
             <button
               onClick={() => setMobileView("list")}
@@ -308,6 +309,22 @@ export default function Dashboard() {
               <MapIcon className="w-4 h-4" /> Map
             </button>
           </div>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button size="icon" variant="outline" className="rounded-full w-12 h-12 bg-card/90 backdrop-blur-md border-white/20 shadow-2xl">
+                <Menu className="w-5 h-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="p-0 w-80 bg-background border-l-white/10">
+              <SidePanel
+                incidents={incidents}
+                onSelectIncident={handleIncidentClick}
+                collapsed={false}
+                onExpand={() => {}}
+              />
+            </SheetContent>
+          </Sheet>
         </div>
       </main>
 

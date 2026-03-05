@@ -148,7 +148,12 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
               key={incident.id}
               position={pos}
               icon={createCustomIcon(incident.agency, incident.callTypeFamily, incident.isMajor)}
-              eventHandlers={{ click: () => onSelectIncident(incident) }}
+              eventHandlers={{
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e);
+                  onSelectIncident(incident);
+                }
+              }}
             >
               <Popup className="incident-popup" closeButton={false}>
                 <div className="p-3 min-w-[200px] bg-card text-card-foreground rounded-lg shadow-xl border border-white/10">
