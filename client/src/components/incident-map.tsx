@@ -10,14 +10,9 @@ import { useSettings } from "@/hooks/use-settings";
 
 function MapController({ selectedLat, selectedLng }: { selectedLat?: number | null, selectedLng?: number | null }) {
   const map = useMap();
-  const lastPos = useRef<{lat: number, lng: number} | null>(null);
-
   useEffect(() => {
     if (selectedLat && selectedLng) {
-      if (lastPos.current?.lat === selectedLat && lastPos.current?.lng === selectedLng) return;
-      
-      lastPos.current = { lat: selectedLat, lng: selectedLng };
-      map.setView([selectedLat, selectedLng], 16, { animate: false });
+      map.flyTo([selectedLat, selectedLng], 16, { duration: 1.5 });
     }
   }, [selectedLat, selectedLng, map]);
   return null;

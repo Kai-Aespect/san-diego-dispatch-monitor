@@ -370,7 +370,3 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     </Sheet>
   );
 }
-      </SheetContent>
-    </Sheet>
-  );
-}
