@@ -5,8 +5,8 @@ import { type IncidentListResponse } from "@shared/routes";
 import { Flame, Shield, Activity, Car, MapPin } from "lucide-react";
 import { renderToString } from "react-dom/server";
 import { format } from "date-fns";
+import { useGeocodeAddresses } from "@/hooks/use-geocode";
 
-// Custom hook to handle auto-centering when a specific incident is selected
 function MapController({ selectedLat, selectedLng }: { selectedLat?: number | null, selectedLng?: number | null }) {
   const map = useMap();
   useEffect(() => {
@@ -41,9 +41,7 @@ const createCustomIcon = (agency: string, family?: string | null, isMajor?: bool
   }
 
   if (isMajor) {
-    pulseClass = `
-      <div class="absolute inset-0 rounded-full animate-ping-slow opacity-75 ${colorClass.split(' ')[0]}"></div>
-    `;
+    pulseClass = `<div class="absolute inset-0 rounded-full animate-ping-slow opacity-75 ${colorClass.split(' ')[0]}"></div>`;
   }
 
   const html = `
@@ -73,23 +71,33 @@ interface IncidentMapProps {
 export function IncidentMap({ incidents, selectedId, onSelectIncident }: IncidentMapProps) {
   const mapRef = useRef<L.Map>(null);
   const [hasValidCenter, setHasValidCenter] = useState(false);
-  
-  // Default to San Diego
   const defaultCenter: [number, number] = [32.7157, -117.1611];
-  
+
   const selectedIncident = incidents.find(i => i.id === selectedId);
 
-  // Auto-fit bounds on initial load if we have points
+  const addressesNeedingGeocode = incidents
+    .filter(i => (!i.lat || !i.lng) && i.location && i.location !== "Unknown")
+    .map(i => i.location);
+
+  const geocodedCoords = useGeocodeAddresses(addressesNeedingGeocode);
+
+  const getPosition = (incident: IncidentListResponse[0]): [number, number] | null => {
+    if (incident.lat && incident.lng) return [incident.lat, incident.lng];
+    const fromGeocode = geocodedCoords[incident.location];
+    return fromGeocode ?? null;
+  };
+
+  const allPositions = incidents.map(getPosition).filter(Boolean) as [number, number][];
+
   useEffect(() => {
-    if (mapRef.current && incidents.length > 0 && !hasValidCenter) {
-      const validPoints = incidents.filter(i => i.lat && i.lng).map(i => [i.lat, i.lng] as [number, number]);
-      if (validPoints.length > 0) {
-        const bounds = L.latLngBounds(validPoints);
-        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-        setHasValidCenter(true);
-      }
+    if (mapRef.current && allPositions.length > 0 && !hasValidCenter) {
+      const bounds = L.latLngBounds(allPositions);
+      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      setHasValidCenter(true);
     }
-  }, [incidents, hasValidCenter]);
+  }, [allPositions.length, hasValidCenter]);
+
+  const selectedPos = selectedIncident ? getPosition(selectedIncident) : null;
 
   return (
     <div className="w-full h-full relative rounded-xl overflow-hidden border border-white/10 shadow-2xl z-0">
@@ -104,24 +112,22 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
-        
-        {/* Map Controller for zooming to selected */}
-        <MapController 
-          selectedLat={selectedIncident?.lat} 
-          selectedLng={selectedIncident?.lng} 
+
+        <MapController
+          selectedLat={selectedPos?.[0]}
+          selectedLng={selectedPos?.[1]}
         />
 
         {incidents.map((incident) => {
-          if (!incident.lat || !incident.lng) return null;
-          
+          const pos = getPosition(incident);
+          if (!pos) return null;
+
           return (
             <Marker
               key={incident.id}
-              position={[incident.lat, incident.lng]}
+              position={pos}
               icon={createCustomIcon(incident.agency, incident.callTypeFamily, incident.isMajor)}
-              eventHandlers={{
-                click: () => onSelectIncident(incident)
-              }}
+              eventHandlers={{ click: () => onSelectIncident(incident) }}
             >
               <Popup className="incident-popup" closeButton={false}>
                 <div className="p-3 min-w-[200px] bg-card text-card-foreground rounded-lg shadow-xl border border-white/10">
@@ -151,21 +157,28 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
           );
         })}
       </MapContainer>
-      
-      {/* Custom Map Controls Overlay */}
+
       <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
-        <button 
+        <button
           onClick={() => mapRef.current?.zoomIn()}
           className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
         >
           <span className="text-lg font-bold">+</span>
         </button>
-        <button 
+        <button
           onClick={() => mapRef.current?.zoomOut()}
           className="w-8 h-8 bg-card/80 backdrop-blur border border-white/10 rounded-lg shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
         >
           <span className="text-lg font-bold">-</span>
         </button>
+      </div>
+
+      <div className="absolute bottom-3 right-3 z-[400]">
+        {addressesNeedingGeocode.length > Object.keys(geocodedCoords).length && (
+          <div className="text-[10px] font-mono bg-card/80 backdrop-blur border border-white/10 rounded px-2 py-1 text-muted-foreground">
+            Locating {addressesNeedingGeocode.length - Object.keys(geocodedCoords).length} calls...
+          </div>
+        )}
       </div>
     </div>
   );
