@@ -2,8 +2,11 @@ import { format, differenceInMinutes } from "date-fns";
 import { type IncidentListResponse } from "@shared/routes";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { MapPin, AlertTriangle, Clock, Tag, StickyNote } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MapPin, AlertTriangle, Clock, Tag, StickyNote, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useState } from "react";
 
 interface IncidentCardProps {
   incident: IncidentListResponse[0];
@@ -13,12 +16,26 @@ interface IncidentCardProps {
 }
 
 export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: IncidentCardProps) {
+  const [isAcknowledging, setIsAcknowledging] = useState(false);
   const isFire = incident.agency.toLowerCase() === 'fire';
   const isMedical = incident.callTypeFamily === 'Medical';
   const isTraffic = incident.callTypeFamily === 'Traffic';
   
-  const isNew = differenceInMinutes(new Date(), new Date(incident.time)) < 15;
-  const isUpdated = differenceInMinutes(new Date(), new Date(incident.lastUpdated)) < 5 && !isNew;
+  const isNew = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.time)) < 15;
+  const isUpdated = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.lastUpdated)) < 5 && !isNew;
+
+  const handleAcknowledge = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsAcknowledging(true);
+    try {
+      await apiRequest("PATCH", `/api/incidents/${incident.id}`, { acknowledged: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
+    } catch (error) {
+      console.error("Failed to acknowledge incident", error);
+    } finally {
+      setIsAcknowledging(false);
+    }
+  };
 
   let themeVariant: "fire" | "police" | "medical" | "traffic" | "default" = "default";
   if (isFire) themeVariant = isMedical ? "medical" : "fire";
@@ -31,7 +48,8 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
         "cursor-pointer transition-all duration-200 overflow-hidden relative group border-white/5",
         isSelected 
           ? "ring-2 ring-primary bg-accent/40 shadow-xl translate-x-1" 
-          : "hover:bg-accent/20 hover:border-white/10 hover:shadow-md"
+          : "hover:bg-accent/20 hover:border-white/10 hover:shadow-md",
+        (isNew || isUpdated) && "border-primary/50 bg-primary/5 shadow-lg shadow-primary/5"
       )}
     >
       {/* Status indicator line */}
@@ -58,7 +76,21 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
               </Badge>
             )}
           </div>
-          <span className="text-[10px] font-mono text-muted-foreground/50">{incident.incidentNo}</span>
+          <div className="flex items-center gap-2">
+            {(isNew || isUpdated) && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="h-6 px-2 text-[10px] font-bold bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary"
+                onClick={handleAcknowledge}
+                disabled={isAcknowledging}
+              >
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                ACKNOWLEDGE
+              </Button>
+            )}
+            <span className="text-[10px] font-mono text-muted-foreground/50">{incident.incidentNo}</span>
+          </div>
         </div>
 
         <h3 className="font-display font-bold text-lg leading-tight mb-1 text-foreground group-hover:text-primary transition-colors">

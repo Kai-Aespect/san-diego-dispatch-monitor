@@ -29,6 +29,7 @@ export const api = {
       input: z.object({
         notes: z.string().optional(),
         tags: z.array(z.string()).optional(),
+        acknowledged: z.boolean().optional(),
       }),
       responses: {
         200: z.custom<typeof incidents.$inferSelect>(),

@@ -5,7 +5,7 @@ import { IncidentMap } from "@/components/incident-map";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
 import { UnitDialog } from "@/components/unit-dialog";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, differenceInMinutes } from "date-fns";
 import { AlertTriangle, Map as MapIcon, List, Filter } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
@@ -29,7 +29,7 @@ export default function Dashboard() {
   // Responsive view toggle for mobile
   const [mobileView, setMobileView] = useState<'list'|'map'>('list');
 
-  // Filtering Logic
+  // Filtering & Sorting Logic
   const filteredIncidents = useMemo(() => {
     return incidents.filter(incident => {
       // Tab filter
@@ -54,9 +54,24 @@ export default function Dashboard() {
 
       return true;
     }).sort((a, b) => {
-      // Sort: Major first, then most recent
+      // Helper to determine if an incident is "New" or "Updated" (mirrors logic in card)
+      const isNewA = !a.acknowledged && differenceInMinutes(new Date(), new Date(a.time)) < 15;
+      const isUpdatedA = !a.acknowledged && !isNewA && differenceInMinutes(new Date(), new Date(a.lastUpdated)) < 5;
+      const isPriorityA = isNewA || isUpdatedA;
+
+      const isNewB = !b.acknowledged && differenceInMinutes(new Date(), new Date(b.time)) < 15;
+      const isUpdatedB = !b.acknowledged && !isNewB && differenceInMinutes(new Date(), new Date(b.lastUpdated)) < 5;
+      const isPriorityB = isNewB || isUpdatedB;
+
+      // 1. Priority (NEW/UPDATED and NOT acknowledged) first
+      if (isPriorityA && !isPriorityB) return -1;
+      if (!isPriorityA && isPriorityB) return 1;
+
+      // 2. Major incidents (if not in priority block)
       if (a.isMajor && !b.isMajor) return -1;
       if (!a.isMajor && b.isMajor) return 1;
+
+      // 3. Most recent by timestamp
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
   }, [incidents, activeTab, showMajorOnly, search]);

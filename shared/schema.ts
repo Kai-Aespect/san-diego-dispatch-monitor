@@ -20,6 +20,7 @@ export const incidents = pgTable("incidents", {
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
   notes: text("notes"),
   tags: jsonb("tags").$type<string[]>().default([]),
+  acknowledged: boolean("acknowledged").default(false),
 });
 
 export const insertIncidentSchema = createInsertSchema(incidents).omit({ id: true });
