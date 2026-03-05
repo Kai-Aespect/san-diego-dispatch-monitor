@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Radio, RefreshCcw, HelpCircle, Clock as ClockIcon, Volume2, VolumeX, X, ExternalLink } from "lucide-react";
+import {
+  Search, Radio, RefreshCcw, HelpCircle, Clock as ClockIcon,
+  Volume2, VolumeX, X, ExternalLink, Play, Pause, Loader2
+} from "lucide-react";
 import { useSyncIncidents } from "@/hooks/use-incidents";
 import { useSettings } from "@/hooks/use-settings";
 import { type IncidentListResponse } from "@shared/routes";
@@ -11,9 +14,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-const BROADCAST_FEED_ID = "20530";
-const BROADCAST_EMBED_URL = `https://www.broadcastify.com/embed/feed/${BROADCAST_FEED_ID}`;
-const BROADCAST_LISTEN_URL = `https://www.broadcastify.com/listen/feed/${BROADCAST_FEED_ID}`;
+// Broadcastify CDN stream URL for feed 20530 (SD Fire & Police)
+// This is the direct audio stream — same source the Broadcastify web player uses
+const STREAM_URL = "https://broadcastify.cdnstream1.com/20530";
+const BROADCAST_LISTEN_URL = "https://www.broadcastify.com/listen/feed/20530";
 
 interface DashboardHeaderProps {
   search: string;
@@ -21,12 +25,14 @@ interface DashboardHeaderProps {
   incidents: IncidentListResponse;
 }
 
+type PlayerState = "idle" | "loading" | "playing" | "paused" | "error";
+
 export function DashboardHeader({ search, setSearch, incidents }: DashboardHeaderProps) {
   const syncMutation = useSyncIncidents();
   const [time, setTime] = useState(new Date());
   const [playerOpen, setPlayerOpen] = useState(false);
-  const [embedError, setEmbedError] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [playerState, setPlayerState] = useState<PlayerState>("idle");
+  const audioRef = useRef<HTMLAudioElement>(null);
   const { settings, setVolumeEnabled } = useSettings();
 
   useEffect(() => {
@@ -34,21 +40,60 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
     return () => clearInterval(timer);
   }, []);
 
-  // Detect if iframe failed to load (X-Frame-Options block)
-  const handleIframeLoad = () => {
-    try {
-      // If we can access contentDocument it loaded; if blocked it throws
-      const doc = iframeRef.current?.contentDocument;
-      if (doc && doc.body && doc.body.innerHTML === "") {
-        setEmbedError(true);
-      }
-    } catch {
-      setEmbedError(true);
+  const togglePlayer = () => {
+    if (!playerOpen) {
+      setPlayerOpen(true);
+      startStream();
+    } else {
+      stopStream();
+      setPlayerOpen(false);
+    }
+  };
+
+  const startStream = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setPlayerState("loading");
+    audio.src = STREAM_URL;
+    audio.load();
+    audio.play().catch(() => setPlayerState("error"));
+  };
+
+  const stopStream = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.src = "";
+    setPlayerState("idle");
+  };
+
+  const togglePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playerState === "playing" || playerState === "loading") {
+      audio.pause();
+      setPlayerState("paused");
+    } else if (playerState === "paused") {
+      setPlayerState("loading");
+      audio.play().catch(() => setPlayerState("error"));
+    } else {
+      startStream();
     }
   };
 
   return (
     <>
+      {/* Hidden audio element */}
+      <audio
+        ref={audioRef}
+        onWaiting={() => setPlayerState("loading")}
+        onPlaying={() => setPlayerState("playing")}
+        onPause={() => setPlayerState(s => s === "loading" ? s : "paused")}
+        onError={() => setPlayerState("error")}
+        onStalled={() => setPlayerState("loading")}
+        preload="none"
+      />
+
       <header className="sticky top-0 z-50 w-full glass-panel border-b border-white/10 px-4 py-3 sm:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -102,29 +147,15 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
               </PopoverTrigger>
               <PopoverContent className="w-[420px] max-h-[85vh] overflow-y-auto bg-card border-white/10 shadow-2xl mr-4" align="end">
                 <div className="space-y-5">
-
                   <section>
                     <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2 text-sm">SDFD Response Levels</h4>
                     <div className="space-y-1.5 text-xs">
-                      <div className="flex gap-2">
-                        <span className="font-mono font-bold text-emerald-400 w-6 shrink-0">1a</span>
-                        <div><span className="text-foreground font-semibold">Basic Response</span> — 1 Engine + 1 Medic. Standard low-acuity medical or minor incident.</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <span className="font-mono font-bold text-amber-400 w-6 shrink-0">2a</span>
-                        <div><span className="text-foreground font-semibold">Enhanced Response</span> — 2 Engines + 1 Medic. Moderate-severity call requiring additional resources.</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <span className="font-mono font-bold text-orange-400 w-6 shrink-0">3a</span>
-                        <div><span className="text-foreground font-semibold">Critical Response</span> — 2 Engines + 2 Medics + 1 Battalion Chief. High-acuity medical (e.g. cardiac arrest).</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <span className="font-mono font-bold text-red-400 w-6 shrink-0">4a</span>
-                        <div><span className="text-foreground font-semibold">Major Incident</span> — 3+ Engines + 2+ Medics + BC. Multi-victim, structure fire, or mass casualty.</div>
-                      </div>
+                      <div className="flex gap-2"><span className="font-mono font-bold text-emerald-400 w-6 shrink-0">1a</span><div><span className="text-foreground font-semibold">Basic Response</span> — 1 Engine + 1 Medic. Standard low-acuity medical or minor incident.</div></div>
+                      <div className="flex gap-2"><span className="font-mono font-bold text-amber-400 w-6 shrink-0">2a</span><div><span className="text-foreground font-semibold">Enhanced Response</span> — 2 Engines + 1 Medic. Moderate-severity call requiring additional resources.</div></div>
+                      <div className="flex gap-2"><span className="font-mono font-bold text-orange-400 w-6 shrink-0">3a</span><div><span className="text-foreground font-semibold">Critical Response</span> — 2 Engines + 2 Medics + 1 Battalion Chief. High-acuity medical (e.g. cardiac arrest).</div></div>
+                      <div className="flex gap-2"><span className="font-mono font-bold text-red-400 w-6 shrink-0">4a</span><div><span className="text-foreground font-semibold">Major Incident</span> — 3+ Engines + 2+ Medics + BC. Multi-victim, structure fire, or mass casualty.</div></div>
                     </div>
                   </section>
-
                   <section>
                     <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2 text-sm">Common SDFD Call Types</h4>
                     <div className="space-y-1 text-xs font-mono">
@@ -154,7 +185,6 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                       ))}
                     </div>
                   </section>
-
                   <section>
                     <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2 text-sm">Unit Type Legend</h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
@@ -171,7 +201,6 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                       <div className="flex items-center gap-2"><span className="text-slate-400 font-bold w-8">Dm</span> Duty Mechanic</div>
                     </div>
                   </section>
-
                   <section>
                     <h4 className="font-display font-bold border-b border-white/10 pb-1 mb-2 text-sm">Common 10-Codes</h4>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono">
@@ -189,7 +218,6 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                       <div><span className="text-primary">Code 4</span> No further assistance needed</div>
                     </div>
                   </section>
-
                 </div>
               </PopoverContent>
             </Popover>
@@ -206,72 +234,88 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
             </Button>
 
             <Button
-              onClick={() => { setPlayerOpen(o => !o); setEmbedError(false); }}
+              onClick={togglePlayer}
               size="sm"
               className={`bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white shadow-lg shadow-red-500/20 border-0 transition-all ${playerOpen ? 'ring-2 ring-orange-400/60' : ''}`}
               data-testid="button-listen-live"
             >
-              <Radio className={`w-4 h-4 mr-2 ${playerOpen ? 'animate-pulse' : ''}`} />
-              {playerOpen ? 'Close Player' : 'Listen Live'}
+              <Radio className={`w-4 h-4 mr-2 ${playerState === 'playing' ? 'animate-pulse' : ''}`} />
+              {playerOpen ? 'Stop Audio' : 'Listen Live'}
             </Button>
           </div>
         </div>
 
-        {/* Inline player bar */}
+        {/* Inline audio player bar */}
         {playerOpen && (
           <div className="mt-3 max-w-screen-2xl mx-auto">
             <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
-                <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-foreground font-semibold">San Diego Fire &amp; Police — Live Dispatch Audio</span>
-                  <span className="text-muted-foreground">· Broadcastify Feed #{BROADCAST_FEED_ID}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={BROADCAST_LISTEN_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] font-mono text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" /> Open in Broadcastify
-                  </a>
-                  <button
-                    onClick={() => setPlayerOpen(false)}
-                    className="text-muted-foreground hover:text-foreground transition-colors ml-2"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              <div className="flex items-center gap-4 px-4 py-3">
 
-              {embedError ? (
-                <div className="px-4 py-6 text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    The Broadcastify player blocked embedding. You can still listen by opening it directly.
-                  </p>
+                {/* Play/Pause button */}
+                <button
+                  onClick={togglePlayPause}
+                  className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-orange-500 flex items-center justify-center shrink-0 hover:from-red-500 hover:to-orange-400 transition-all shadow-lg shadow-red-500/30"
+                  title={playerState === 'playing' ? 'Pause' : 'Play'}
+                >
+                  {playerState === 'loading' ? (
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  ) : playerState === 'playing' ? (
+                    <Pause className="w-4 h-4 text-white" />
+                  ) : (
+                    <Play className="w-4 h-4 text-white ml-0.5" />
+                  )}
+                </button>
+
+                {/* Status + label */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    {playerState === 'playing' && (
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    )}
+                    <span className="truncate">San Diego Fire &amp; Police — Live Dispatch</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                    {playerState === 'idle' && 'Press play to start'}
+                    {playerState === 'loading' && 'Connecting to stream...'}
+                    {playerState === 'playing' && 'Live · Broadcastify Feed #20530'}
+                    {playerState === 'paused' && 'Paused'}
+                    {playerState === 'error' && 'Stream unavailable — try opening directly'}
+                  </div>
+                </div>
+
+                {/* Animated waveform when playing */}
+                {playerState === 'playing' && (
+                  <div className="flex items-end gap-0.5 h-5 shrink-0">
+                    {[3, 5, 4, 6, 3, 5, 4].map((h, i) => (
+                      <div
+                        key={i}
+                        className="w-1 bg-orange-400 rounded-full animate-pulse"
+                        style={{ height: `${h * 3}px`, animationDelay: `${i * 0.1}s` }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Fallback link if error */}
+                {playerState === 'error' && (
                   <a
                     href={BROADCAST_LISTEN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-orange-500 text-white text-sm font-semibold shadow-lg"
+                    className="shrink-0 text-xs flex items-center gap-1 text-orange-400 hover:text-orange-300 font-mono"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    Open on Broadcastify
+                    <ExternalLink className="w-3 h-3" /> Open
                   </a>
-                </div>
-              ) : (
-                <iframe
-                  ref={iframeRef}
-                  src={BROADCAST_EMBED_URL}
-                  onLoad={handleIframeLoad}
-                  className="w-full"
-                  style={{ height: 56, border: 'none', display: 'block', background: 'transparent' }}
-                  allow="autoplay"
-                  title="SD Dispatch Live Audio"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                />
-              )}
+                )}
+
+                {/* Close */}
+                <button
+                  onClick={() => { stopStream(); setPlayerOpen(false); }}
+                  className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
