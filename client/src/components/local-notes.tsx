@@ -153,11 +153,13 @@ function ColorSwatch({ color, selected, onClick }: { color: string; selected: bo
     <button
       onClick={onClick}
       title={color}
-      style={{ backgroundColor: hex }}
       className={cn(
-        "w-5 h-5 rounded-full transition-all border-2",
-        selected ? "border-white scale-125 shadow-lg" : "border-transparent opacity-70 hover:opacity-100 hover:scale-110"
+        "w-5 h-5 rounded-full transition-all flex-none",
+        selected
+          ? "ring-2 ring-white ring-offset-2 ring-offset-black/60 shadow-md"
+          : "opacity-60 hover:opacity-90"
       )}
+      style={{ backgroundColor: hex }}
     />
   );
 }
@@ -213,8 +215,8 @@ function NoteCard({
       <div className={cn("rounded-xl border p-3 relative overflow-hidden", editColors.border, editColors.bg)}>
         <div className={cn("absolute left-0 top-0 bottom-0 w-1", editColors.bar)} />
         <div className="pl-2 space-y-2">
-          <div className="flex gap-2 mb-2 items-center">
-            <span className="text-[10px] text-muted-foreground mr-1">Color:</span>
+          <div className="flex flex-wrap gap-2 mb-2 items-center">
+            <span className="text-[10px] text-muted-foreground/70 uppercase tracking-widest">Color</span>
             {ALL_COLORS.map(c => (
               <ColorSwatch key={c} color={c} selected={color === c} onClick={() => setColor(c)} />
             ))}
