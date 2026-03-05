@@ -185,8 +185,6 @@ export default function Dashboard() {
       };
       if (isPriority(a) && !isPriority(b)) return -1;
       if (!isPriority(a) && isPriority(b)) return 1;
-      if (a.isMajor && !b.isMajor) return -1;
-      if (!a.isMajor && b.isMajor) return 1;
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
   }, [incidents, activeTab, filterMode, search, showArchived]);

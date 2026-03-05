@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { type IncidentListResponse } from "@shared/routes";
-import { Bookmark, StickyNote, Shield, Settings } from "lucide-react";
+import { Bookmark, StickyNote, Shield, Settings, Lock } from "lucide-react";
 import { BookmarksPanel } from "./bookmarks-panel";
 import { LocalNotes } from "./local-notes";
-import { AdminInfoBoard } from "./admin-info-board";
+import { InfoBoard } from "./info-board";
+import { AdminPanel } from "./admin-panel";
 import { SettingsPanel } from "./settings-panel";
 import { useBookmarks } from "@/hooks/use-bookmarks";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "bookmarks" | "notes" | "info" | "settings";
+type PanelTab = "bookmarks" | "notes" | "info" | "admin" | "settings";
 
 interface SidePanelProps {
   incidents: IncidentListResponse;
@@ -17,16 +19,18 @@ interface SidePanelProps {
   onExpand?: () => void;
 }
 
-const TABS: Array<{ id: PanelTab; icon: React.ReactNode; label: string; testId: string }> = [
-  { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />, label: "Tracked", testId: "tab-bookmarks" },
-  { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "My Notes", testId: "tab-notes" },
-  { id: "info",      icon: <Shield className="w-4 h-4" />, label: "Info", testId: "tab-info" },
-  { id: "settings",  icon: <Settings className="w-4 h-4" />, label: "Settings", testId: "tab-settings" },
-];
-
 export function SidePanel({ incidents, onSelectIncident, collapsed = false, onExpand }: SidePanelProps) {
   const [activeTab, setActiveTab] = useState<PanelTab>("bookmarks");
   const { bookmarkedIds } = useBookmarks();
+  const { isAdmin } = useAdminAuth();
+
+  const TABS: Array<{ id: PanelTab; icon: React.ReactNode; label: string; testId: string }> = [
+    { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />, label: "Tracked", testId: "tab-bookmarks" },
+    { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "My Notes", testId: "tab-notes" },
+    { id: "info",      icon: <Shield className="w-4 h-4" />, label: "Info", testId: "tab-info" },
+    { id: "admin",     icon: <Lock className="w-4 h-4" />, label: "Admin", testId: "tab-admin" },
+    { id: "settings",  icon: <Settings className="w-4 h-4" />, label: "Settings", testId: "tab-settings" },
+  ];
 
   return (
     <div className="h-full flex flex-col border-l border-white/5 bg-background/70 backdrop-blur-md w-full overflow-hidden">
@@ -50,7 +54,8 @@ export function SidePanel({ incidents, onSelectIncident, collapsed = false, onEx
                   : "text-primary bg-primary/5 border-primary"
                 : collapsed
                   ? "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5 border-transparent"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5 border-transparent",
+              tab.id === "admin" && isAdmin && "text-emerald-400"
             )}
             title={tab.label}
             data-testid={tab.testId}
@@ -65,11 +70,14 @@ export function SidePanel({ incidents, onSelectIncident, collapsed = false, onEx
                 {bookmarkedIds.length}
               </span>
             )}
+            {tab.id === "admin" && isAdmin && !collapsed && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            )}
           </button>
         ))}
       </div>
 
-      {/* Content — hidden when collapsed */}
+      {/* Content */}
       {!collapsed && (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {activeTab === "bookmarks" && (
@@ -79,7 +87,16 @@ export function SidePanel({ incidents, onSelectIncident, collapsed = false, onEx
             <LocalNotes incidents={incidents} />
           )}
           {activeTab === "info" && (
-            <AdminInfoBoard />
+            <div className="flex flex-col h-full">
+              <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground">Info Board</span>
+              </div>
+              <InfoBoard />
+            </div>
+          )}
+          {activeTab === "admin" && (
+            <AdminPanel incidents={incidents} />
           )}
           {activeTab === "settings" && (
             <div className="overflow-y-auto custom-scrollbar flex-1">

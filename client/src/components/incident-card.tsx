@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
 import { useBookmarks } from "@/hooks/use-bookmarks";
+import { getCallDescription } from "@/lib/call-descriptions";
 
 interface IncidentCardProps {
   incident: IncidentListResponse[0];
@@ -16,7 +17,6 @@ interface IncidentCardProps {
   onUnitClick: (e: React.MouseEvent, unit: string) => void;
 }
 
-// Extract response level prefix like "1a", "2a", "3a", "4a" from the call type string
 function extractResponseLevel(callType: string): string | null {
   const match = callType.match(/^(\d+[a-z])\s/i);
   return match ? match[1].toLowerCase() : null;
@@ -41,6 +41,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
   const isUpdated = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.lastUpdated)) < 5 && !isNew;
   const bookmarked = isBookmarked(incident.id);
   const responseLevel = extractResponseLevel(incident.callType);
+  const description = getCallDescription(incident.callType, incident.callTypeFamily);
 
   const handleAcknowledge = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -144,10 +145,11 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
           {incident.callType}
         </h3>
         {incident.callTypeFamily && incident.callTypeFamily !== incident.callType && (
-          <p className="text-[11px] text-muted-foreground/70 font-mono mb-1 leading-none">
+          <p className="text-[11px] text-muted-foreground/70 font-mono mb-0.5 leading-none">
             {incident.callTypeFamily}{incident.neighborhood ? ` · ${incident.neighborhood}` : ""}
           </p>
         )}
+        <p className="text-[11px] text-muted-foreground/60 italic mb-2 leading-snug">{description}</p>
 
         <div className="flex items-start gap-1.5 text-sm text-muted-foreground mb-3">
           <MapPin className="w-4 h-4 shrink-0 mt-0.5" />

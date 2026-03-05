@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { incidents, incidentHistory, insertIncidentSchema } from './schema';
+import { incidents, incidentHistory, adminCards, polls, insertAdminCardSchema, insertPollSchema } from './schema';
 
 export const errorSchemas = {
   internal: z.object({
@@ -30,9 +30,18 @@ export const api = {
         notes: z.string().optional(),
         tags: z.array(z.string()).optional(),
         acknowledged: z.boolean().optional(),
+        active: z.boolean().optional(),
       }),
       responses: {
         200: z.custom<typeof incidents.$inferSelect>(),
+      }
+    },
+    clear: {
+      method: 'POST' as const,
+      path: '/api/incidents/clear' as const,
+      input: z.object({ ids: z.array(z.number()) }),
+      responses: {
+        200: z.object({ success: z.boolean(), cleared: z.number() })
       }
     },
     acknowledgeAll: {
@@ -47,6 +56,76 @@ export const api = {
       path: '/api/incidents/:id/history' as const,
       responses: {
         200: z.array(z.custom<typeof incidentHistory.$inferSelect>()),
+      }
+    },
+  },
+  adminCards: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/admin/cards' as const,
+      responses: {
+        200: z.array(z.custom<typeof adminCards.$inferSelect>()),
+      }
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/admin/cards' as const,
+      input: insertAdminCardSchema,
+      responses: {
+        200: z.custom<typeof adminCards.$inferSelect>(),
+      }
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/admin/cards/:id' as const,
+      input: insertAdminCardSchema.partial(),
+      responses: {
+        200: z.custom<typeof adminCards.$inferSelect>(),
+      }
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/admin/cards/:id' as const,
+      responses: {
+        200: z.object({ success: z.boolean() })
+      }
+    },
+    reorder: {
+      method: 'POST' as const,
+      path: '/api/admin/cards/reorder' as const,
+      input: z.object({ orderedIds: z.array(z.number()) }),
+      responses: {
+        200: z.object({ success: z.boolean() })
+      }
+    },
+  },
+  polls: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/polls' as const,
+      input: insertPollSchema,
+      responses: {
+        200: z.custom<typeof polls.$inferSelect>(),
+      }
+    },
+    results: {
+      method: 'GET' as const,
+      path: '/api/polls/:id/results' as const,
+      responses: {
+        200: z.object({
+          poll: z.custom<typeof polls.$inferSelect>(),
+          results: z.record(z.string(), z.number()),
+          voterChoice: z.string().nullable(),
+          total: z.number(),
+        })
+      }
+    },
+    vote: {
+      method: 'POST' as const,
+      path: '/api/polls/:id/vote' as const,
+      input: z.object({ option: z.string(), voterToken: z.string() }),
+      responses: {
+        200: z.object({ success: z.boolean(), alreadyVoted: z.boolean() })
       }
     },
   },
@@ -77,3 +156,5 @@ export type IncidentListResponse = z.infer<typeof api.incidents.list.responses[2
 export type SyncResponse = z.infer<typeof api.incidents.sync.responses[200]>;
 export type StatusResponse = z.infer<typeof api.status.get.responses[200]>;
 export type IncidentHistoryResponse = z.infer<typeof api.incidents.history.responses[200]>;
+export type AdminCardListResponse = z.infer<typeof api.adminCards.list.responses[200]>;
+export type PollResultsResponse = z.infer<typeof api.polls.results.responses[200]>;

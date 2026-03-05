@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { type IncidentListResponse } from "@shared/routes";
 import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight, Bookmark, BookmarkCheck } from "lucide-react";
+import { getCallDescription } from "@/lib/call-descriptions";
 import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -180,7 +181,10 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
             <SheetTitle className="text-2xl font-display font-bold leading-tight mt-3">
               {incident.callType}
             </SheetTitle>
-            <SheetDescription className="flex items-center gap-2 text-base mt-1">
+            <p className="text-sm text-muted-foreground italic mt-1 leading-snug">
+              {getCallDescription(incident.callType, incident.callTypeFamily)}
+            </p>
+            <SheetDescription className="flex items-center gap-2 text-base mt-2">
               <Clock className="w-4 h-4 text-primary" />
               <span className="font-mono text-foreground">{format(new Date(incident.time), "PPpp")}</span>
             </SheetDescription>

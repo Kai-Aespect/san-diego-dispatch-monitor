@@ -33,13 +33,48 @@ export const incidentHistory = pgTable("incident_history", {
   changes: jsonb("changes").$type<Array<{ field: string; oldValue: string; newValue: string }>>().default([]),
 });
 
+export const adminCards = pgTable("admin_cards", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull().default("text"),
+  title: text("title").notNull(),
+  content: text("content").notNull().default(""),
+  url: text("url"),
+  color: text("color").notNull().default("blue"),
+  pinned: boolean("pinned").default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  pollId: integer("poll_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const polls = pgTable("polls", {
+  id: serial("id").primaryKey(),
+  question: text("question").notNull(),
+  options: jsonb("options").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const pollVotes = pgTable("poll_votes", {
+  id: serial("id").primaryKey(),
+  pollId: integer("poll_id").notNull(),
+  option: text("option").notNull(),
+  voterToken: text("voter_token").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertIncidentSchema = createInsertSchema(incidents).omit({ id: true });
 export const insertIncidentHistorySchema = createInsertSchema(incidentHistory).omit({ id: true });
+export const insertAdminCardSchema = createInsertSchema(adminCards).omit({ id: true, createdAt: true });
+export const insertPollSchema = createInsertSchema(polls).omit({ id: true, createdAt: true });
 
 export type InsertIncident = z.infer<typeof insertIncidentSchema>;
 export type InsertIncidentHistory = z.infer<typeof insertIncidentHistorySchema>;
+export type InsertAdminCard = z.infer<typeof insertAdminCardSchema>;
+export type InsertPoll = z.infer<typeof insertPollSchema>;
 export type Incident = typeof incidents.$inferSelect;
 export type IncidentHistory = typeof incidentHistory.$inferSelect;
+export type AdminCard = typeof adminCards.$inferSelect;
+export type Poll = typeof polls.$inferSelect;
+export type PollVote = typeof pollVotes.$inferSelect;
 
 export type CreateIncidentRequest = InsertIncident;
 export type UpdateIncidentRequest = Partial<InsertIncident>;

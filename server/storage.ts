@@ -1,6 +1,10 @@
 import { db } from "./db";
-import { incidents, incidentHistory, type Incident, type InsertIncident, type IncidentHistory } from "@shared/schema";
-import { eq, desc, and, notInArray, inArray, sql, lt } from "drizzle-orm";
+import {
+  incidents, incidentHistory, adminCards, polls, pollVotes,
+  type Incident, type InsertIncident, type IncidentHistory,
+  type AdminCard, type InsertAdminCard, type Poll, type InsertPoll, type PollVote,
+} from "@shared/schema";
+import { eq, desc, and, notInArray, inArray, sql, lt, asc } from "drizzle-orm";
 
 const MAX_HISTORY_PER_INCIDENT = 200;
 
@@ -10,8 +14,23 @@ export interface IStorage {
   getIncidentByNo(incidentNo: string): Promise<Incident | undefined>;
   updateIncident(id: number, updates: Partial<Incident>): Promise<Incident>;
   acknowledgeAll(): Promise<void>;
+  clearIncidents(ids: number[]): Promise<void>;
   getIncidentHistory(incidentId: number): Promise<IncidentHistory[]>;
   markMissingAsInactive(activeIds: Set<string>): Promise<void>;
+
+  // Admin cards
+  getAdminCards(): Promise<AdminCard[]>;
+  createAdminCard(card: InsertAdminCard): Promise<AdminCard>;
+  updateAdminCard(id: number, updates: Partial<InsertAdminCard>): Promise<AdminCard>;
+  deleteAdminCard(id: number): Promise<void>;
+  reorderAdminCards(orderedIds: number[]): Promise<void>;
+
+  // Polls
+  createPoll(poll: InsertPoll): Promise<Poll>;
+  getPoll(id: number): Promise<Poll | undefined>;
+  getPollResults(pollId: number): Promise<Record<string, number>>;
+  vote(pollId: number, option: string, voterToken: string): Promise<{ success: boolean; alreadyVoted: boolean }>;
+  getVoterChoice(pollId: number, voterToken: string): Promise<string | null>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -46,7 +65,6 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     if (existing) {
-      // Separate system fields (lat/lng set by geocoder) from user fields
       const SYSTEM_FIELDS = new Set(['lat', 'lng']);
       const systemChanges: Array<{ field: string; oldValue: string; newValue: string }> = [];
       const userChanges: Array<{ field: string; oldValue: string; newValue: string }> = [];
@@ -91,6 +109,22 @@ export class DatabaseStorage implements IStorage {
       .where(eq(incidents.acknowledged, false));
   }
 
+  async clearIncidents(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    await db.update(incidents)
+      .set({ active: false })
+      .where(inArray(incidents.id, ids));
+    // Record history
+    for (const id of ids) {
+      await db.insert(incidentHistory).values({
+        incidentId: id,
+        source: 'admin',
+        summary: 'Admin manually cleared call',
+        changes: [{ field: 'active', oldValue: 'true', newValue: 'false' }],
+      });
+    }
+  }
+
   private async pruneHistory(incidentId: number): Promise<void> {
     const rows = await db.select({ id: incidentHistory.id })
       .from(incidentHistory)
@@ -105,13 +139,9 @@ export class DatabaseStorage implements IStorage {
   async markMissingAsInactive(activeIds: Set<string>): Promise<void> {
     const ids = Array.from(activeIds);
     if (ids.length === 0) return;
-    
-    // Mark everything not in the list as inactive
     await db.update(incidents)
       .set({ active: false })
       .where(and(eq(incidents.active, true), notInArray(incidents.incidentNo, ids)));
-      
-    // Re-activate everything currently in the list
     await db.update(incidents)
       .set({ active: true })
       .where(inArray(incidents.incidentNo, ids));
@@ -181,6 +211,69 @@ export class DatabaseStorage implements IStorage {
       });
       return created;
     }
+  }
+
+  // ── Admin Cards ──────────────────────────────────────────────
+
+  async getAdminCards(): Promise<AdminCard[]> {
+    return await db.select().from(adminCards).orderBy(desc(adminCards.pinned), asc(adminCards.sortOrder), desc(adminCards.createdAt));
+  }
+
+  async createAdminCard(card: InsertAdminCard): Promise<AdminCard> {
+    const maxOrder = await db.select({ m: sql<number>`coalesce(max(${adminCards.sortOrder}), 0)` }).from(adminCards);
+    const nextOrder = (maxOrder[0]?.m ?? 0) + 1;
+    const [created] = await db.insert(adminCards).values({ ...card, sortOrder: nextOrder }).returning();
+    return created;
+  }
+
+  async updateAdminCard(id: number, updates: Partial<InsertAdminCard>): Promise<AdminCard> {
+    const [updated] = await db.update(adminCards).set(updates).where(eq(adminCards.id, id)).returning();
+    return updated;
+  }
+
+  async deleteAdminCard(id: number): Promise<void> {
+    await db.delete(adminCards).where(eq(adminCards.id, id));
+  }
+
+  async reorderAdminCards(orderedIds: number[]): Promise<void> {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(adminCards).set({ sortOrder: i }).where(eq(adminCards.id, orderedIds[i]));
+    }
+  }
+
+  // ── Polls ────────────────────────────────────────────────────
+
+  async createPoll(poll: InsertPoll): Promise<Poll> {
+    const [created] = await db.insert(polls).values(poll).returning();
+    return created;
+  }
+
+  async getPoll(id: number): Promise<Poll | undefined> {
+    const [poll] = await db.select().from(polls).where(eq(polls.id, id));
+    return poll;
+  }
+
+  async getPollResults(pollId: number): Promise<Record<string, number>> {
+    const votes = await db.select().from(pollVotes).where(eq(pollVotes.pollId, pollId));
+    const counts: Record<string, number> = {};
+    for (const v of votes) {
+      counts[v.option] = (counts[v.option] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  async vote(pollId: number, option: string, voterToken: string): Promise<{ success: boolean; alreadyVoted: boolean }> {
+    const existing = await db.select().from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.voterToken, voterToken)));
+    if (existing.length > 0) return { success: false, alreadyVoted: true };
+    await db.insert(pollVotes).values({ pollId, option, voterToken });
+    return { success: true, alreadyVoted: false };
+  }
+
+  async getVoterChoice(pollId: number, voterToken: string): Promise<string | null> {
+    const [row] = await db.select().from(pollVotes)
+      .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.voterToken, voterToken)));
+    return row?.option ?? null;
   }
 }
 
