@@ -12,7 +12,11 @@ function MapController({ selectedLat, selectedLng }: { selectedLat?: number | nu
   const map = useMap();
   useEffect(() => {
     if (typeof selectedLat === 'number' && typeof selectedLng === 'number' && !isNaN(selectedLat) && !isNaN(selectedLng)) {
-      map.flyTo([selectedLat, selectedLng], 16, { duration: 1.5 });
+      try {
+        map.flyTo([selectedLat, selectedLng], 16, { duration: 1.5 });
+      } catch (e) {
+        console.error("Map flyTo error:", e);
+      }
     }
   }, [selectedLat, selectedLng, map]);
   return null;
