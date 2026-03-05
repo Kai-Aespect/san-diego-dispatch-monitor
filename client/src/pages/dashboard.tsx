@@ -239,8 +239,14 @@ export default function Dashboard() {
 
         {/* Left panel */}
         <div
-          className="flex flex-col h-full border-r border-white/5 bg-background/50 shrink-0 overflow-hidden"
-          style={{ width: leftResize.width }}
+          className="flex flex-col h-full shrink-0 overflow-hidden"
+          style={{
+            width: leftResize.width,
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.02)',
+            backdropFilter: 'blur(30px)',
+            WebkitBackdropFilter: 'blur(30px)',
+          }}
         >
           <CallListContent {...callListProps} />
         </div>
@@ -261,7 +267,13 @@ export default function Dashboard() {
         {/* Right side panel */}
         <div
           className="flex flex-col h-full shrink-0 overflow-hidden"
-          style={{ width: rightResize.width }}
+          style={{
+            width: rightResize.width,
+            borderLeft: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.02)',
+            backdropFilter: 'blur(30px)',
+            WebkitBackdropFilter: 'blur(30px)',
+          }}
         >
           <SidePanel
             incidents={incidents}
@@ -372,13 +384,19 @@ function CallListContent({
 }: CallListContentProps) {
   return (
     <>
-      <div className="p-3 space-y-2.5 border-b border-white/5 bg-card/30 z-10 shrink-0">
+      <div className="p-3 space-y-2.5 z-10 shrink-0" style={{
+          background: 'rgba(255,255,255,0.03)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}>
         <div className="flex items-center justify-between gap-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-            <TabsList className="grid w-full grid-cols-3 bg-black/40 border border-white/5">
-              <TabsTrigger value="all" className="text-xs font-semibold data-[state=active]:bg-secondary">All</TabsTrigger>
-              <TabsTrigger value="fire" className="text-xs font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400">Fire/Med</TabsTrigger>
-              <TabsTrigger value="police" className="text-xs font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400">Police</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 border border-white/8"
+              style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)', borderRadius: '12px' }}>
+              <TabsTrigger value="all" className="text-xs font-semibold data-[state=active]:bg-white/10 rounded-xl">All</TabsTrigger>
+              <TabsTrigger value="fire" className="text-xs font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400 rounded-xl">Fire/Med</TabsTrigger>
+              <TabsTrigger value="police" className="text-xs font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 rounded-xl">Police</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button
@@ -395,7 +413,7 @@ function CallListContent({
 
         <div className="flex items-center gap-2">
           <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
-            <SelectTrigger className="flex-1 h-8 text-xs bg-black/30 border-white/10" data-testid="filter-select">
+            <SelectTrigger className="flex-1 h-8 text-xs border-white/8 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }} data-testid="filter-select">
               <SelectValue placeholder="Filter..." />
             </SelectTrigger>
             <SelectContent className="bg-card border-white/10">

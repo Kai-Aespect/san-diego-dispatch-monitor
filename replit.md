@@ -6,7 +6,7 @@ SD Dispatch Live is a real-time emergency dispatch monitoring dashboard for San 
 
 Key capabilities:
 - Scrapes fire incidents from the SD Fire Dispatch JSON API (`SDFireDispatch/api/v1/Incidents`)
-- Scrapes police incidents from the SDPD Online dispatch portal (HTML scraping via cheerio)
+- Scrapes police incidents from the SDPD Online dispatch portal (HTML scraping via cheerio); police page times are in Pacific time (America/Los_Angeles) and are correctly offset to UTC via `parsePacificTime()` in scraper.ts
 - Geocodes addresses using the Nominatim (OpenStreetMap) API with rate limiting and in-memory caching
 - Stores incidents and their change history in PostgreSQL via Drizzle ORM
 - Polls and syncs data every 5 seconds on the server

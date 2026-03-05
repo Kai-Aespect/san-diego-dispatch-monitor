@@ -5,6 +5,36 @@ import { geocodePendingIncidents } from './geocoder';
 
 export let lastSyncTime: Date = new Date();
 
+/**
+ * The SDPD dispatch page reports times in America/Los_Angeles local time
+ * without any timezone designator. Node.js (running UTC) treats them as
+ * UTC, making every timestamp 7–8 hours too early in the database.
+ *
+ * This function re-interprets the parsed timestamp as a Pacific wall-clock
+ * time and shifts it to the correct UTC value.
+ */
+function parsePacificTime(timeStr: string): Date {
+  const raw = new Date(timeStr);
+  if (isNaN(raw.getTime())) return new Date();
+
+  // Determine what Los Angeles thinks "now" is in UTC offset minutes.
+  // e.g. PST = -480, PDT = -420
+  const nowUtc = Date.now();
+  const laStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).format(nowUtc);
+  // Parse the LA string back as UTC to get the LA wall-clock epoch
+  const laEpoch = new Date(laStr.replace(/(\d+)\/(\d+)\/(\d+),\s/, '$3-$1-$2T') + 'Z').getTime();
+  const offsetMs = nowUtc - laEpoch; // e.g. +28800000 for PST (UTC is 8h ahead of LA)
+
+  // raw.getTime() is the epoch where the LA time-string was parsed as UTC.
+  // Shift by the offset to get the true UTC epoch.
+  return new Date(raw.getTime() + offsetMs);
+}
+
 export async function fetchFireIncidents(): Promise<InsertIncident[]> {
   try {
     const response = await fetch('https://webapps.sandiego.gov/SDFireDispatch/api/v1/Incidents', {
@@ -109,8 +139,7 @@ export async function fetchPoliceIncidents(): Promise<InsertIncident[]> {
 
         let time = new Date();
         if (timeStr) {
-           time = new Date(timeStr);
-           if (isNaN(time.getTime())) time = new Date();
+          time = parsePacificTime(timeStr);
         }
 
         let family = 'Other';
