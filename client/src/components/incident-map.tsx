@@ -10,9 +10,14 @@ import { useSettings } from "@/hooks/use-settings";
 
 function MapController({ selectedLat, selectedLng }: { selectedLat?: number | null, selectedLng?: number | null }) {
   const map = useMap();
+  const lastPos = useRef<{lat: number, lng: number} | null>(null);
+
   useEffect(() => {
     if (selectedLat && selectedLng) {
-      map.flyTo([selectedLat, selectedLng], 16, { duration: 1.5 });
+      if (lastPos.current?.lat === selectedLat && lastPos.current?.lng === selectedLng) return;
+      
+      lastPos.current = { lat: selectedLat, lng: selectedLng };
+      map.setView([selectedLat, selectedLng], 16, { animate: false });
     }
   }, [selectedLat, selectedLng, map]);
   return null;
@@ -118,13 +123,15 @@ export function IncidentMap({ incidents, selectedId, onSelectIncident }: Inciden
   }, []);
 
   return (
-    <div className="w-full h-full relative overflow-hidden z-0">
+    <div className="w-full h-full relative overflow-hidden z-0 bg-slate-950">
       <MapContainer
         center={defaultCenter}
         zoom={11}
         className="w-full h-full"
         ref={mapRef}
         zoomControl={false}
+        tap={false} // Disable tap handler for better mobile marker interaction
+        preferCanvas={true}
       >
         <TileLayer
           key={tileUrl}
