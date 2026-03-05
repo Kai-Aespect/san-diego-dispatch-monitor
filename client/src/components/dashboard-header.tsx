@@ -94,14 +94,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         preload="none"
       />
 
-      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6"
-        style={{
-          background: 'var(--glass-bg)',
-          backdropFilter: 'var(--blur-glass)',
-          WebkitBackdropFilter: 'var(--blur-glass)',
-          borderBottom: '1px solid var(--glass-border)',
-          boxShadow: '0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 40px rgba(0,0,0,0.4)',
-        }}>
+      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-background/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="flex items-center gap-2">
@@ -256,14 +249,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         {/* Inline audio player bar */}
         {playerOpen && (
           <div className="mt-3 max-w-screen-2xl mx-auto">
-            <div className="rounded-2xl overflow-hidden glass-iridescent"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                backdropFilter: 'blur(40px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.08) inset',
-              }}>
+            <div className="rounded-2xl overflow-hidden bg-background/60 backdrop-blur-xl border border-white/10 shadow-2xl">
               <div className="flex items-center gap-4 px-4 py-3">
 
                 {/* Play/Pause button */}

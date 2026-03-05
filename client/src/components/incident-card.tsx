@@ -76,43 +76,25 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
       data-testid={`card-incident-${incident.id}`}
       style={{
         background: isSelected
-          ? `rgba(255,255,255,0.09)`
-          : 'rgba(255,255,255,0.045)',
-        backdropFilter: 'blur(20px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(150%)',
-        border: `1px solid ${isSelected ? style.accent + '55' : 'rgba(255,255,255,0.09)'}`,
-        borderRadius: '16px',
+          ? `rgba(255,255,255,0.08)`
+          : 'rgba(255,255,255,0.04)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: `1px solid ${isSelected ? style.accent + '33' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: '12px',
         boxShadow: isSelected
-          ? `0 0 0 1px ${style.accent}40, 0 8px 32px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.07) inset`
-          : '0 2px 8px rgba(0,0,0,0.2), 0 1px 0 rgba(255,255,255,0.05) inset',
+          ? `0 0 0 1px ${style.accent}20, 0 8px 24px rgba(0,0,0,0.2)`
+          : '0 2px 4px rgba(0,0,0,0.1)',
         transform: isSelected ? 'translateX(2px)' : undefined,
         overflow: 'hidden',
       }}
     >
-      {/* Specular highlight on top */}
-      <div style={{
-        position: 'absolute', top: 0, left: '15%', right: '15%', height: '1px',
-        background: `linear-gradient(90deg, transparent, rgba(255,255,255,${isSelected ? '0.3' : '0.15'}), transparent)`,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Left accent stripe with glow */}
+      {/* Left accent stripe */}
       <div style={{
         position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
         background: style.accent,
-        boxShadow: `2px 0 12px ${style.glow}`,
-        borderRadius: '16px 0 0 16px',
+        borderRadius: '12px 0 0 12px',
       }} />
-
-      {/* Alert pulse for new calls */}
-      {(isNew || isUpdated) && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `radial-gradient(ellipse at left center, ${style.accent}12 0%, transparent 60%)`,
-          pointerEvents: 'none',
-          borderRadius: 'inherit',
-        }} />
-      )}
 
       <div className="p-4 pl-5 relative">
         {/* Top row */}
