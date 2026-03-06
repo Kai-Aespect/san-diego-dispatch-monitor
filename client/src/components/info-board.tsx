@@ -1,11 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, Lock, Key, AlertCircle, ShieldCheck } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AdminCardListResponse } from "@shared/routes";
-import { useAuthKey } from "@/hooks/use-auth-key";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 
 const COLOR_MAP: Record<string, string> = {
   blue:   "bg-blue-500/15 border-blue-500/25 text-blue-400",
@@ -30,7 +27,7 @@ function getVoterToken(): string {
   return tok;
 }
 
-function PollCard({ pollId }: { pollId: number }) {
+function PollCard({ pollId, cardColor }: { pollId: number; cardColor: string }) {
   const voterToken = getVoterToken();
   const qc = useQueryClient();
 
@@ -119,70 +116,11 @@ function PollCard({ pollId }: { pollId: number }) {
   );
 }
 
-function LockedCardOverlay({ authorize }: { authorize: (key: string) => boolean }) {
-  const [keyVal, setKeyVal] = useState("");
-  const [error, setError] = useState(false);
-
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (authorize(keyVal)) {
-      setKeyVal("");
-    } else {
-      setError(true);
-      setKeyVal("");
-      setTimeout(() => setError(false), 2000);
-    }
-  };
-
-  return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-black/65 backdrop-blur-sm px-4 py-3 gap-2">
-      <div className="flex items-center gap-1.5 text-amber-400">
-        <Lock className="w-3.5 h-3.5" />
-        <span className="text-xs font-bold">Key Required</span>
-      </div>
-      <p className="text-[10px] text-muted-foreground text-center leading-snug">
-        Enter your authorization key to view this note.
-      </p>
-      <form onSubmit={handleSubmit} className="w-full flex gap-1.5 mt-0.5">
-        <div className="relative flex-1">
-          <Key className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-          <Input
-            type="password"
-            placeholder="Auth key..."
-            value={keyVal}
-            onChange={(e) => { setKeyVal(e.target.value); setError(false); }}
-            className={cn(
-              "pl-7 h-8 text-xs bg-black/60 border-white/10 font-mono tracking-widest",
-              error && "border-destructive"
-            )}
-          />
-        </div>
-        <Button
-          type="submit"
-          size="sm"
-          className="h-8 px-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold gap-1 shrink-0"
-        >
-          <ShieldCheck className="w-3 h-3" />
-          Unlock
-        </Button>
-      </form>
-      {error && (
-        <div className="flex items-center gap-1 text-destructive text-[10px]">
-          <AlertCircle className="w-3 h-3" />
-          Invalid key — try again
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function InfoBoard() {
   const { data: cards = [], isLoading } = useQuery<AdminCardListResponse>({
     queryKey: ['/api/admin/cards'],
     refetchInterval: 15000,
   });
-
-  const { isAuthorized, authorize } = useAuthKey();
 
   if (isLoading) {
     return (
@@ -206,7 +144,6 @@ export function InfoBoard() {
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
       {cards.map(card => {
-        const isLocked = card.isKeyLocked && !isAuthorized;
         const colorClass = getColorClass(card.color);
         const typeIcon =
           card.type === "link" ? <Link className="w-3 h-3 shrink-0" /> :
@@ -215,42 +152,33 @@ export function InfoBoard() {
           <FileText className="w-3 h-3 shrink-0" />;
 
         return (
-          <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5 relative overflow-hidden", colorClass)}>
-            {/* Card content — blurred when locked */}
-            <div className={cn("space-y-1.5 transition-all", isLocked && "blur-sm select-none pointer-events-none")}>
-              <div className="flex items-center gap-1.5 text-xs font-semibold">
-                {typeIcon}
-                <span>{card.title}</span>
-                <div className="ml-auto flex items-center gap-1.5">
-                  {card.isKeyLocked && <Lock className="w-2.5 h-2.5 opacity-60" />}
-                  {card.pinned && <span className="text-[9px] opacity-40 uppercase">Pinned</span>}
-                </div>
-              </div>
-
-              {card.type === "poll" && card.pollId ? (
-                <PollCard pollId={card.pollId} />
-              ) : (
-                <>
-                  {card.content && (
-                    <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{card.content}</p>
-                  )}
-                  {card.type === "link" && card.url && (
-                    <a
-                      href={card.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs font-mono hover:underline opacity-70 hover:opacity-100 transition-opacity"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      {card.url.replace(/^https?:\/\//, "")}
-                    </a>
-                  )}
-                </>
-              )}
+          <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5", colorClass)}>
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {typeIcon}
+              <span>{card.title}</span>
+              {card.pinned && <span className="text-[9px] opacity-40 ml-auto">PINNED</span>}
             </div>
 
-            {/* Overlay shown on top of blurred content */}
-            {isLocked && <LockedCardOverlay authorize={authorize} />}
+            {card.type === "poll" && card.pollId ? (
+              <PollCard pollId={card.pollId} cardColor={card.color} />
+            ) : (
+              <>
+                {card.content && (
+                  <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{card.content}</p>
+                )}
+                {card.type === "link" && card.url && (
+                  <a
+                    href={card.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs font-mono hover:underline opacity-70 hover:opacity-100 transition-opacity"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    {card.url.replace(/^https?:\/\//, "")}
+                  </a>
+                )}
+              </>
+            )}
           </div>
         );
       })}

@@ -45,13 +45,11 @@ interface NewCardState {
   color: string;
   pollQuestion: string;
   pollOptions: string[];
-  isKeyLocked: boolean;
 }
 
 const DEFAULT_NEW: NewCardState = {
   type: "text", title: "", content: "", url: "", color: "blue",
   pollQuestion: "", pollOptions: ["", ""],
-  isKeyLocked: false,
 };
 
 function SortableCard({
@@ -87,10 +85,7 @@ function SortableCard({
            card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
            <FileText className="w-3 h-3 shrink-0" />}
           <span className="truncate">{card.title}</span>
-          <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            {card.isKeyLocked && <Lock className="w-3 h-3 text-amber-400" />}
-            {card.pinned && <span className="text-[9px] opacity-50 uppercase">Pinned</span>}
-          </div>
+          {card.pinned && <span className="text-[9px] opacity-50 ml-auto shrink-0">PINNED</span>}
         </div>
         {card.content && <p className="text-[11px] text-foreground/60 truncate">{card.content}</p>}
       </div>
@@ -252,7 +247,6 @@ function AdminBoardSection() {
       content: newCard.content,
       color: newCard.color,
       pinned: false,
-      isKeyLocked: newCard.isKeyLocked,
       sortOrder: 0,
     };
     if (newCard.type === "link") body.url = newCard.url;
@@ -324,20 +318,6 @@ function AdminBoardSection() {
                 <ColorSwatch key={c.value} hex={c.hex} selected={newCard.color === c.value} onClick={() => setNewCard({ ...newCard, color: c.value })} />
               ))}
             </div>
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <button
-              onClick={() => setNewCard({ ...newCard, isKeyLocked: !newCard.isKeyLocked })}
-              className="flex items-center gap-1.5 group"
-            >
-              <div className={cn(
-                "w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors",
-                newCard.isKeyLocked ? "bg-amber-500 border-amber-500" : "border-white/20 group-hover:border-white/40"
-              )}>
-                {newCard.isKeyLocked && <Lock className="w-2.5 h-2.5 text-black" />}
-              </div>
-              <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">Key Locked (Auth Required)</span>
-            </button>
           </div>
           <Input placeholder="Title..." value={newCard.title} onChange={(e) => setNewCard({ ...newCard, title: e.target.value })}
             className="h-8 text-sm bg-accent/20 border-white/10" />
@@ -428,7 +408,6 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollLoaded, setPollLoaded] = useState(false);
-  const [isKeyLocked, setIsKeyLocked] = useState(card.isKeyLocked ?? false);
 
   useEffect(() => {
     if (card.type === "poll" && card.pollId && !pollLoaded) {
@@ -444,7 +423,7 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   }, [card.type, card.pollId, pollLoaded]);
 
   const save = async () => {
-    const cardBody: Record<string, unknown> = { title, color, isKeyLocked };
+    const cardBody: Record<string, unknown> = { title, color };
     if (card.type !== "poll") cardBody.content = content;
     if (card.type === "link") cardBody.url = url || undefined;
 
@@ -474,20 +453,6 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
         {COLOR_OPTIONS.map(c => (
           <ColorSwatch key={c.value} hex={c.hex} selected={color === c.value} onClick={() => setColor(c.value)} />
         ))}
-      </div>
-      <div className="flex items-center gap-2 px-1">
-        <button
-          onClick={() => setIsKeyLocked(!isKeyLocked)}
-          className="flex items-center gap-1.5 group"
-        >
-          <div className={cn(
-            "w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors",
-            isKeyLocked ? "bg-amber-500 border-amber-500" : "border-white/20 group-hover:border-white/40"
-          )}>
-            {isKeyLocked && <Lock className="w-2.5 h-2.5 text-black" />}
-          </div>
-          <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">Key Locked (Auth Required)</span>
-        </button>
       </div>
       <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 text-sm bg-accent/20 border-white/10 font-bold" placeholder="Title..." />
       {card.type !== "poll" && (
