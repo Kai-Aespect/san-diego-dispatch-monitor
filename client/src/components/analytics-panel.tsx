@@ -4,9 +4,9 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
 } from "recharts";
 import { type IncidentListResponse } from "@shared/routes";
-import { differenceInMinutes, format, startOfDay, subDays, getHours } from "date-fns";
+import { differenceInMinutes, format, startOfDay, subDays, getHours, getDay } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown, Brain, Flame as FlameIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { DailyStat } from "@shared/schema";
 
@@ -105,7 +105,9 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
     major: true,
     top: true,
     dow: true,
-    dist: true
+    dist: true,
+    heatmap: false,
+    predictions: false,
   });
   const toggle = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -309,6 +311,78 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
     : null;
 
   const activePreset = PRESETS.find(p => p.minutes === rangeMinutes);
+
+  // ── Heat Map: day-of-week × hour ──────────────────────────────
+  // Use ALL incidents (not just ranged) for a meaningful heat map
+  const heatmapGrid = useMemo(() => {
+    // grid[dow][hour] = count
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    const src = rangeMinutes >= 10080 ? incidents : ranged;
+    for (const inc of src) {
+      const d = new Date(inc.time);
+      grid[getDay(d)][getHours(d)]++;
+    }
+    return grid;
+  }, [incidents, ranged, rangeMinutes]);
+
+  const heatmapMax = useMemo(() =>
+    Math.max(1, ...heatmapGrid.flatMap(r => r)),
+    [heatmapGrid]
+  );
+
+  // ── Predictions ──────────────────────────────────────────────
+  const predictions = useMemo(() => {
+    const ratePerHour = rangeMinutes > 0 ? (total / rangeMinutes) * 60 : 0;
+    const ratePerDay  = ratePerHour * 24;
+
+    // Busiest hour of day (from hourly pattern)
+    const peakHourIdx = hourlyData.reduce((best, h, i) => h.total > hourlyData[best].total ? i : best, 0);
+    const peakHourLabel = peakHourIdx === 0 ? "12 AM" : peakHourIdx < 12 ? `${peakHourIdx} AM` : peakHourIdx === 12 ? "12 PM" : `${peakHourIdx - 12} PM`;
+
+    // Busiest day of week
+    const peakDowIdx = dowData.reduce((best, d, i) => d.count > dowData[best].count ? i : best, 0);
+    const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+    // Medical surge: is Medical growing vs prior period?
+    const priorMedical = incidents.filter(i => {
+      const m = differenceInMinutes(now, new Date(i.time));
+      return categorize(i) === "Medical" && m > rangeMinutes && m <= rangeMinutes * 2;
+    }).length;
+    const curMedical = catCounts.Medical;
+    const medicalTrend = priorMedical > 0 ? ((curMedical - priorMedical) / priorMedical) * 100 : 0;
+
+    // Peak period
+    const periodCounts = PERIODS.map(p => ({
+      ...p,
+      cnt: p.hours.reduce((s, h) => s + hourlyData[h].total, 0),
+    }));
+    const peakPeriod = periodCounts.reduce((a, b) => b.cnt > a.cnt ? b : a, periodCounts[0]);
+    const quietPeriod = periodCounts.reduce((a, b) => b.cnt < a.cnt ? b : a, periodCounts[0]);
+
+    // Major incident likelihood: major rate per hour
+    const majorRatePerHour = rangeMinutes > 0 ? (majorInRange.length / rangeMinutes) * 60 : 0;
+    const majorNext6hProb = Math.min(99, Math.round((1 - Math.exp(-majorRatePerHour * 6)) * 100));
+
+    // Call acceleration: compare first half vs second half of range
+    const halfPoint = new Date(now.getTime() - (rangeMinutes / 2) * 60000);
+    const firstHalf  = ranged.filter(i => new Date(i.time) < halfPoint).length;
+    const secondHalf = ranged.filter(i => new Date(i.time) >= halfPoint).length;
+    const accel = firstHalf > 0 ? ((secondHalf - firstHalf) / firstHalf) * 100 : 0;
+
+    return {
+      next1h: Math.round(ratePerHour),
+      next6h: Math.round(ratePerHour * 6),
+      next24h: Math.round(ratePerDay),
+      peakHourLabel,
+      peakDow: DOW_NAMES[peakDowIdx],
+      medicalTrend,
+      peakPeriod: peakPeriod?.label ?? "—",
+      quietPeriod: quietPeriod?.label ?? "—",
+      majorNext6hProb,
+      accel,
+      ratePerHour,
+    };
+  }, [total, rangeMinutes, hourlyData, dowData, catCounts, incidents, ranged, majorInRange, now]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -750,6 +824,255 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                       </span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ── Activity Heat Map ── */}
+          <section>
+            <SectionTitle collapsed={collapsed.heatmap} onToggle={() => toggle('heatmap')}>Activity Heat Map</SectionTitle>
+            {!collapsed.heatmap && (
+              <div className="mt-2 space-y-3">
+                <p className="text-[10px] text-muted-foreground/50">Calls by day of week × hour of day</p>
+                {/* Grid */}
+                <div className="overflow-x-auto">
+                  <div className="min-w-[340px]">
+                    {/* Hour labels */}
+                    <div className="flex ml-8 mb-0.5">
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <div key={h} className="flex-1 text-center" style={{ fontSize: 7, color: "#475569" }}>
+                          {h % 6 === 0 ? (h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h-12}p`) : ""}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((day, dow) => (
+                      <div key={day} className="flex items-center gap-0 mb-0.5">
+                        <span className="w-8 text-[9px] text-muted-foreground/50 font-mono shrink-0">{day}</span>
+                        <div className="flex flex-1 gap-px">
+                          {Array.from({ length: 24 }, (_, hr) => {
+                            const val = heatmapGrid[dow][hr];
+                            const intensity = val / heatmapMax;
+                            // Interpolate: 0 = dark navy, 0.33 = teal, 0.66 = amber, 1 = red
+                            let r: number, g: number, b: number;
+                            if (intensity <= 0) {
+                              r = 15; g = 23; b = 42;
+                            } else if (intensity < 0.25) {
+                              const t = intensity / 0.25;
+                              r = Math.round(15 + t * (20 - 15));
+                              g = Math.round(23 + t * (184 - 23));
+                              b = Math.round(42 + t * (166 - 42));
+                            } else if (intensity < 0.6) {
+                              const t = (intensity - 0.25) / 0.35;
+                              r = Math.round(20 + t * (251 - 20));
+                              g = Math.round(184 + t * (146 - 184));
+                              b = Math.round(166 + t * (60 - 166));
+                            } else {
+                              const t = (intensity - 0.6) / 0.4;
+                              r = Math.round(251 + t * (239 - 251));
+                              g = Math.round(146 + t * (68 - 146));
+                              b = Math.round(60 + t * (68 - 60));
+                            }
+                            const bg = `rgb(${r},${g},${b})`;
+                            return (
+                              <div
+                                key={hr}
+                                title={`${day} ${hr === 0 ? "12am" : hr < 12 ? `${hr}am` : hr === 12 ? "12pm" : `${hr-12}pm`}: ${val} calls`}
+                                className="flex-1 rounded-sm cursor-default"
+                                style={{ height: 14, backgroundColor: bg }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Color key */}
+                    <div className="flex items-center gap-2 mt-2 ml-8">
+                      <span className="text-[9px] text-muted-foreground/50">Low</span>
+                      <div className="flex flex-1 rounded overflow-hidden" style={{ height: 8 }}>
+                        {Array.from({ length: 40 }, (_, i) => {
+                          const intensity = i / 39;
+                          let r: number, g: number, b: number;
+                          if (intensity < 0.25) {
+                            const t = intensity / 0.25;
+                            r = Math.round(15 + t * (20 - 15));
+                            g = Math.round(23 + t * (184 - 23));
+                            b = Math.round(42 + t * (166 - 42));
+                          } else if (intensity < 0.6) {
+                            const t = (intensity - 0.25) / 0.35;
+                            r = Math.round(20 + t * (251 - 20));
+                            g = Math.round(184 + t * (146 - 184));
+                            b = Math.round(166 + t * (60 - 166));
+                          } else {
+                            const t = (intensity - 0.6) / 0.4;
+                            r = Math.round(251 + t * (239 - 251));
+                            g = Math.round(146 + t * (68 - 146));
+                            b = Math.round(60 + t * (68 - 60));
+                          }
+                          return <div key={i} style={{ flex: 1, backgroundColor: `rgb(${r},${g},${b})` }} />;
+                        })}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground/50">High</span>
+                    </div>
+                    <div className="flex justify-between ml-8 mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: "rgb(15,23,42)" }} />
+                        <span className="text-[9px] text-muted-foreground/40">No calls</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: "rgb(20,184,166)" }} />
+                        <span className="text-[9px] text-muted-foreground/40">Low</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: "rgb(251,146,60)" }} />
+                        <span className="text-[9px] text-muted-foreground/40">Medium</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: "rgb(239,68,68)" }} />
+                        <span className="text-[9px] text-muted-foreground/40">High</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ── Predictions ── */}
+          <section>
+            <SectionTitle collapsed={collapsed.predictions} onToggle={() => toggle('predictions')}>
+              <span className="flex items-center gap-1.5"><Brain className="w-3 h-3" />Predictions & Forecasts</span>
+            </SectionTitle>
+            {!collapsed.predictions && (
+              <div className="mt-2 space-y-3">
+                <p className="text-[10px] text-muted-foreground/40 italic">Estimates based on historical call patterns in the selected window.</p>
+
+                {/* Call volume forecast */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5">Expected Call Volume</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Next 1H", value: predictions.next1h },
+                      { label: "Next 6H", value: predictions.next6h },
+                      { label: "Next 24H", value: predictions.next24h },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center">
+                        <p className="text-[9px] text-muted-foreground/50 mb-0.5">{label}</p>
+                        <p className="text-lg font-bold text-primary leading-none">{value}</p>
+                        <p className="text-[9px] text-muted-foreground/40 mt-0.5">calls</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pattern predictions */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5">Pattern Analysis</p>
+                  <div className="space-y-2">
+                    {/* Peak hour */}
+                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">Historically Busiest Hour</p>
+                        <p className="text-sm font-bold text-foreground">{predictions.peakHourLabel}</p>
+                      </div>
+                      <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded">PEAK</span>
+                    </div>
+
+                    {/* Peak day */}
+                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">Busiest Day of Week</p>
+                        <p className="text-sm font-bold text-foreground">{predictions.peakDow}</p>
+                      </div>
+                      <span className="text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded">PATTERN</span>
+                    </div>
+
+                    {/* Peak / quiet period */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                        <p className="text-[9px] text-muted-foreground/50">Busiest Period</p>
+                        <p className="text-sm font-bold text-orange-400">{predictions.peakPeriod}</p>
+                      </div>
+                      <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                        <p className="text-[9px] text-muted-foreground/50">Quietest Period</p>
+                        <p className="text-sm font-bold text-emerald-400">{predictions.quietPeriod}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Risk indicators */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5">Risk Indicators</p>
+                  <div className="space-y-2">
+                    {/* Major incident probability */}
+                    <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                          <FlameIcon className="w-3 h-3 text-amber-400" /> Major Incident Probability (next 6H)
+                        </p>
+                        <span className={cn("text-[10px] font-bold",
+                          predictions.majorNext6hProb >= 70 ? "text-red-400" :
+                          predictions.majorNext6hProb >= 40 ? "text-amber-400" : "text-emerald-400"
+                        )}>
+                          {predictions.majorNext6hProb}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-1.5">
+                        <div
+                          className="h-1.5 rounded-full transition-all"
+                          style={{
+                            width: `${predictions.majorNext6hProb}%`,
+                            backgroundColor: predictions.majorNext6hProb >= 70 ? "#f87171" :
+                              predictions.majorNext6hProb >= 40 ? "#fbbf24" : "#34d399",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Medical trend */}
+                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">Medical Call Trend</p>
+                        <p className={cn("text-sm font-bold",
+                          predictions.medicalTrend > 15 ? "text-red-400" :
+                          predictions.medicalTrend > 0 ? "text-amber-400" :
+                          predictions.medicalTrend < -15 ? "text-emerald-400" : "text-foreground"
+                        )}>
+                          {predictions.medicalTrend > 0 ? "+" : ""}{predictions.medicalTrend.toFixed(0)}%
+                          <span className="text-[10px] text-muted-foreground/50 font-normal ml-1">vs prior period</span>
+                        </p>
+                      </div>
+                      {predictions.medicalTrend > 15
+                        ? <TrendingUp className="w-4 h-4 text-red-400" />
+                        : predictions.medicalTrend < -15
+                        ? <TrendingDown className="w-4 h-4 text-emerald-400" />
+                        : <Minus className="w-4 h-4 text-muted-foreground/50" />
+                      }
+                    </div>
+
+                    {/* Call acceleration */}
+                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">Call Acceleration</p>
+                        <p className={cn("text-sm font-bold",
+                          predictions.accel > 20 ? "text-red-400" :
+                          predictions.accel > 0 ? "text-amber-400" :
+                          "text-emerald-400"
+                        )}>
+                          {predictions.accel > 0 ? "+" : ""}{predictions.accel.toFixed(0)}%
+                          <span className="text-[10px] text-muted-foreground/50 font-normal ml-1">2nd half vs 1st half</span>
+                        </p>
+                      </div>
+                      {predictions.accel > 20
+                        ? <TrendingUp className="w-4 h-4 text-red-400" />
+                        : predictions.accel < -10
+                        ? <TrendingDown className="w-4 h-4 text-emerald-400" />
+                        : <Minus className="w-4 h-4 text-muted-foreground/50" />
+                      }
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
