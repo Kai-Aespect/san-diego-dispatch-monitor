@@ -65,11 +65,11 @@ function categorize(inc: IncidentListResponse[0]): keyof Omit<typeof CALL_COLORS
 }
 
 const TT: React.CSSProperties = {
-  backgroundColor: "#161929",
-  border: "1px solid rgba(255,255,255,0.07)",
+  backgroundColor: "#1e2340",
+  border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: "8px",
   fontSize: "11px",
-  color: "#cbd5e1",
+  color: "#f1f5f9",
   padding: "6px 10px",
 };
 
@@ -443,7 +443,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={trendInterval} />
                   <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} itemStyle={{ color: "#cbd5e1" }} />
+                    <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      labelStyle={{ color: "#94a3b8", marginBottom: "4px", fontWeight: "bold" }}
+                    />
                   {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => (
                     <Line key={cat} type="monotone" dataKey={cat} stroke={CALL_COLORS[cat]} strokeWidth={1.5} dot={false} name={cat} />
                   ))}
@@ -475,7 +479,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={trendInterval} />
                   <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} />
+                    <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      labelStyle={{ color: "#94a3b8", marginBottom: "4px", fontWeight: "bold" }}
+                    />
                   <Area type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={1.5} fill="url(#totalGrad)" dot={false} name="Total" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -492,7 +500,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                     <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
                     <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TT} />
+                      <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      labelStyle={{ color: "#94a3b8", marginBottom: "4px", fontWeight: "bold" }}
+                    />
                     <Bar dataKey="Medical" stackId="s" fill={CALL_COLORS.Medical} />
                     <Bar dataKey="Fire"    stackId="s" fill={CALL_COLORS.Fire} />
                     <Bar dataKey="Police"  stackId="s" fill={CALL_COLORS.Police} />
@@ -543,7 +555,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                         <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
                         <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
                         <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                        <Tooltip contentStyle={TT} />
+                          <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      labelStyle={{ color: "#94a3b8", marginBottom: "4px", fontWeight: "bold" }}
+                    />
                         <Bar dataKey="Major" fill={CALL_COLORS.Major} radius={[2,2,0,0]} name="Major" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -623,7 +639,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                     <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TT} />
+                      <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      labelStyle={{ color: "#94a3b8", marginBottom: "4px", fontWeight: "bold" }}
+                    />
                     <Bar dataKey="count" fill="#6366f1" fillOpacity={0.7} radius={[3,3,0,0]} name="Calls" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -648,7 +668,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                         <Cell key={cat} fill={CALL_COLORS[cat as keyof typeof CALL_COLORS] ?? "#94a3b8"} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={TT} formatter={(v) => [`${v}`, ""]} />
+                    <Tooltip
+                      contentStyle={TT}
+                      itemStyle={{ color: "#f1f5f9" }}
+                      formatter={(v: number, name: string) => [v, name]}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
