@@ -119,6 +119,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   const { data: dailyStatsData = [] } = useQuery<DailyStat[]>({ queryKey: ['/api/daily-stats'] });
 
   const [rangeMinutes, setRangeMinutes] = useState(10080); // 7d default
+  const [forecastHours, setForecastHours] = useState(6);
   const [customVal, setCustomVal] = useState("7");
   const [customUnit, setCustomUnit] = useState<Unit>("day");
   const [showCustom, setShowCustom] = useState(false);
@@ -366,7 +367,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
 
     // Major incident likelihood: major rate per hour
     const majorRatePerHour = rangeMinutes > 0 ? (majorInRange.length / rangeMinutes) * 60 : 0;
-    const majorNext6hProb = Math.min(99, Math.round((1 - Math.exp(-majorRatePerHour * 6)) * 100));
+    const majorProb = Math.min(99, Math.round((1 - Math.exp(-majorRatePerHour * forecastHours)) * 100));
 
     // Call type specific predictions
     const typePredictions = (["Medical", "Fire", "Police", "Traffic", "Other"] as const).map(cat => {
@@ -405,12 +406,12 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
       medicalTrend,
       peakPeriod: peakPeriod?.label ?? "—",
       quietPeriod: quietPeriod?.label ?? "—",
-      majorNext6hProb,
+      majorProb,
       accel,
       ratePerHour,
       typePredictions,
     };
-  }, [total, rangeMinutes, hourlyData, dowData, catCounts, incidents, ranged, majorInRange, now]);
+  }, [total, rangeMinutes, hourlyData, dowData, catCounts, incidents, ranged, majorInRange, now, forecastHours]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -967,120 +968,6 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
             )}
           </section>
 
-          {/* ── Predictions ── */}
-          <section>
-            <SectionTitle collapsed={collapsed.predictions} onToggle={() => toggle('predictions')}>
-              <span className="flex items-center gap-1.5"><Brain className="w-3 h-3" />Predictions & Forecasts</span>
-            </SectionTitle>
-            {!collapsed.predictions && (
-              <div className="mt-2 space-y-4">
-                <p className="text-[10px] text-muted-foreground/40 italic">Estimates based on historical call patterns in the selected window.</p>
-
-                {/* Call volume forecast */}
-                <div>
-                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Expected Call Volume</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: "Next 1H", value: predictions.next1h },
-                      { label: "Next 6H", value: predictions.next6h },
-                      { label: "Next 24H", value: predictions.next24h },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center shadow-sm">
-                        <p className="text-[9px] text-muted-foreground/50 mb-0.5">{label}</p>
-                        <p className="text-lg font-bold text-primary leading-none">{value}</p>
-                        <p className="text-[9px] text-muted-foreground/40 mt-0.5">calls</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Call Type Specific Forecasts */}
-                <div className="space-y-2">
-                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Call Type Forecasts</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {predictions.typePredictions.map(tp => (
-                      <div key={tp.cat} className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <span className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: CALL_COLORS[tp.cat as keyof typeof CALL_COLORS] }} />
-                          <div>
-                            <p className="text-[10px] text-muted-foreground/60 leading-tight">{tp.cat} Forecast</p>
-                            <p className="text-sm font-bold text-foreground">
-                              ~{(tp.rate * 6).toFixed(1)} <span className="text-[10px] font-normal text-muted-foreground/50">in 6H</span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] text-muted-foreground/40 leading-tight">Peak Window</p>
-                          <p className="text-[11px] font-mono text-foreground/80">{tp.peakLabel}</p>
-                        </div>
-                        <div className={cn(
-                          "flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
-                          tp.trend > 10 ? "bg-red-500/10 text-red-400" :
-                          tp.trend < -10 ? "bg-emerald-500/10 text-emerald-400" :
-                          "bg-white/5 text-muted-foreground/50"
-                        )}>
-                          {tp.trend > 0 ? "+" : ""}{tp.trend.toFixed(0)}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Risk indicators */}
-                <div>
-                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Risk Indicators</p>
-                  <div className="space-y-2">
-                    {/* Major incident probability */}
-                    <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 shadow-sm">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1.5">
-                          <FlameIcon className="w-3.5 h-3.5 text-amber-400" /> Major Incident Probability (next 6H)
-                        </p>
-                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded",
-                          predictions.majorNext6hProb >= 70 ? "bg-red-500/20 text-red-400" :
-                          predictions.majorNext6hProb >= 40 ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400"
-                        )}>
-                          {predictions.majorNext6hProb}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="h-1.5 rounded-full transition-all duration-500"
-                          style={{
-                            width: `${predictions.majorNext6hProb}%`,
-                            backgroundColor: predictions.majorNext6hProb >= 70 ? "#f87171" :
-                              predictions.majorNext6hProb >= 40 ? "#fbbf24" : "#34d399",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Call acceleration */}
-                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 shadow-sm">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground/60">Call Acceleration</p>
-                        <p className={cn("text-sm font-bold",
-                          predictions.accel > 20 ? "text-red-400" :
-                          predictions.accel > 0 ? "text-amber-400" :
-                          "text-emerald-400"
-                        )}>
-                          {predictions.accel > 0 ? "+" : ""}{predictions.accel.toFixed(0)}%
-                          <span className="text-[10px] text-muted-foreground/50 font-normal ml-1">2nd half vs 1st half</span>
-                        </p>
-                      </div>
-                      {predictions.accel > 20
-                        ? <TrendingUp className="w-4 h-4 text-red-400" />
-                        : predictions.accel < -10
-                        ? <TrendingDown className="w-4 h-4 text-emerald-400" />
-                        : <Minus className="w-4 h-4 text-muted-foreground/50" />
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-
           {/* ── Pattern Analysis ── */}
           <section>
             <SectionTitle collapsed={collapsed.patterns} onToggle={() => toggle('patterns')}>
@@ -1118,6 +1005,141 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                         <p className="text-sm font-bold text-emerald-400">{predictions.quietPeriod}</p>
                       </div>
                     </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ── Predictions ── */}
+          <section>
+            <SectionTitle collapsed={collapsed.predictions} onToggle={() => toggle('predictions')}>
+              <span className="flex items-center gap-1.5"><Brain className="w-3 h-3" />Predictions & Forecasts</span>
+            </SectionTitle>
+            {!collapsed.predictions && (
+              <div className="mt-2 space-y-4">
+                {/* Forecast Horizon Selection */}
+                <div className="flex items-center justify-between gap-2 bg-white/[0.03] p-2 rounded-lg border border-white/[0.05]">
+                  <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider">Forecast Horizon</span>
+                  <div className="flex gap-1">
+                    {[1, 6, 12, 24, 48].map(h => (
+                      <button
+                        key={h}
+                        onClick={() => setForecastHours(h)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[9px] font-bold transition-all",
+                          forecastHours === h 
+                            ? "bg-primary text-primary-foreground shadow-sm" 
+                            : "bg-white/5 text-muted-foreground hover:bg-white/10"
+                        )}
+                      >
+                        {h}H
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground/40 italic">Estimates based on historical call patterns in the selected window.</p>
+
+                {/* Call volume forecast */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Expected Call Volume</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: `Next 1H`, value: Math.round(predictions.ratePerHour) },
+                      { label: `Next 6H`, value: Math.round(predictions.ratePerHour * 6) },
+                      { label: `Next 24H`, value: Math.round(predictions.ratePerHour * 24) },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center shadow-sm">
+                        <p className="text-[9px] text-muted-foreground/50 mb-0.5">{label}</p>
+                        <p className="text-lg font-bold text-primary leading-none">{value}</p>
+                        <p className="text-[9px] text-muted-foreground/40 mt-0.5">calls</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Call Type Specific Forecasts */}
+                <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Call Type Forecasts</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {predictions.typePredictions.map(tp => (
+                      <div key={tp.cat} className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <span className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: CALL_COLORS[tp.cat as keyof typeof CALL_COLORS] }} />
+                          <div>
+                            <p className="text-[10px] text-muted-foreground/60 leading-tight">{tp.cat} Forecast</p>
+                            <p className="text-sm font-bold text-foreground">
+                              ~{(tp.rate * forecastHours).toFixed(1)} <span className="text-[10px] font-normal text-muted-foreground/50">in {forecastHours}H</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] text-muted-foreground/40 leading-tight">Peak Window</p>
+                          <p className="text-[11px] font-mono text-foreground/80">{tp.peakLabel}</p>
+                        </div>
+                        <div className={cn(
+                          "flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
+                          tp.trend > 10 ? "bg-red-500/10 text-red-400" :
+                          tp.trend < -10 ? "bg-emerald-500/10 text-emerald-400" :
+                          "bg-white/5 text-muted-foreground/50"
+                        )}>
+                          {tp.trend > 0 ? "+" : ""}{tp.trend.toFixed(0)}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Risk indicators */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider mb-1.5 text-primary/70">Risk Indicators</p>
+                  <div className="space-y-2">
+                    {/* Major incident probability */}
+                    <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 shadow-sm">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1.5">
+                          <FlameIcon className="w-3.5 h-3.5 text-amber-400" /> Major Incident Probability (next {forecastHours}H)
+                        </p>
+                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded",
+                          predictions.majorProb >= 70 ? "bg-red-500/20 text-red-400" :
+                          predictions.majorProb >= 40 ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400"
+                        )}>
+                          {predictions.majorProb}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-1.5 rounded-full transition-all duration-500"
+                          style={{
+                            width: `${predictions.majorProb}%`,
+                            backgroundColor: predictions.majorProb >= 70 ? "#f87171" :
+                              predictions.majorProb >= 40 ? "#fbbf24" : "#34d399",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Call acceleration */}
+                    <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 shadow-sm">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">Call Acceleration</p>
+                        <p className={cn("text-sm font-bold",
+                          predictions.accel > 20 ? "text-red-400" :
+                          predictions.accel > 0 ? "text-amber-400" :
+                          "text-emerald-400"
+                        )}>
+                          {predictions.accel > 0 ? "+" : ""}{predictions.accel.toFixed(0)}%
+                          <span className="text-[10px] text-muted-foreground/50 font-normal ml-1">2nd half vs 1st half</span>
+                        </p>
+                      </div>
+                      {predictions.accel > 20
+                        ? <TrendingUp className="w-4 h-4 text-red-400" />
+                        : predictions.accel < -10
+                        ? <TrendingDown className="w-4 h-4 text-emerald-400" />
+                        : <Minus className="w-4 h-4 text-muted-foreground/50" />
+                      }
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
