@@ -32,10 +32,9 @@ const MIN_LEFT = 260;
 const MAX_LEFT = 620;
 const DEFAULT_LEFT = 400;
 
-const MIN_RIGHT = 48;
-const MAX_RIGHT = 500;
-const DEFAULT_RIGHT = 320;
-const COLLAPSE_THRESHOLD = 90;
+const MIN_RIGHT = 240;
+const MAX_RIGHT = 560;
+const DEFAULT_RIGHT = 340;
 
 function useResizeHandle(
   initialWidth: number,
@@ -120,8 +119,6 @@ export default function Dashboard() {
 
   const leftResize = useResizeHandle(DEFAULT_LEFT, MIN_LEFT, MAX_LEFT, "right");
   const rightResize = useResizeHandle(DEFAULT_RIGHT, MIN_RIGHT, MAX_RIGHT, "left");
-
-  const rightCollapsed = rightResize.width < COLLAPSE_THRESHOLD;
 
   const priorityCount = useMemo(() => incidents.filter(i => {
     const isNew = !i.acknowledged && differenceInMinutes(new Date(), new Date(i.time)) < 15;
@@ -266,8 +263,6 @@ export default function Dashboard() {
           <SidePanel
             incidents={incidents}
             onSelectIncident={handleIncidentClick}
-            collapsed={rightCollapsed}
-            onExpand={() => rightResize.setWidth(DEFAULT_RIGHT)}
           />
         </div>
       </main>
@@ -318,8 +313,6 @@ export default function Dashboard() {
               <SidePanel
                 incidents={incidents}
                 onSelectIncident={handleIncidentClick}
-                collapsed={false}
-                onExpand={() => {}}
               />
             </SheetContent>
           </Sheet>
