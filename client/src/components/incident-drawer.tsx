@@ -52,6 +52,8 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
+  const [pin, setPin] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
   const { isBookmarked, toggleBookmark } = useBookmarks();
 
   const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
@@ -71,25 +73,14 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     if (incident) {
       setNotes(incident.notes || "");
       setTags(incident.tags || []);
+      setUnlocked(false);
+      setPin("");
     }
   }, [incident?.id]);
-
-  useEffect(() => {
-    if (!incident || !isOpen) return;
-    const timer = setTimeout(() => {
-      if (notes !== (incident.notes || "") || JSON.stringify(tags) !== JSON.stringify(incident.tags || [])) {
-        handleSave();
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [notes, tags, isOpen]);
 
   if (!incident) return null;
 
   const bookmarked = isBookmarked(incident.id);
-
-  const [pin, setPin] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
 
   const handleSave = async () => {
     if (isSaving) return;

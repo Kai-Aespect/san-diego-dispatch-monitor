@@ -7,6 +7,8 @@ import { type IncidentListResponse } from "@shared/routes";
 import { differenceInMinutes, format, startOfDay, subDays, getHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { DailyStat } from "@shared/schema";
 
 interface AnalyticsPanelProps {
   incidents: IncidentListResponse;
@@ -107,6 +109,8 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   });
   const toggle = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
+  const { data: dailyStatsData = [] } = useQuery<DailyStat[]>({ queryKey: ['/api/daily-stats'] });
+
   const [rangeMinutes, setRangeMinutes] = useState(10080); // 7d default
   const [customVal, setCustomVal] = useState("7");
   const [customUnit, setCustomUnit] = useState<Unit>("day");
@@ -189,28 +193,49 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
       }
       return buckets;
     } else {
-      // Daily buckets
-      const days = Math.min(Math.ceil(rangeDays), 90);
+      // Daily buckets — for days beyond 30-day incident window, use daily_stats
+      const cutoff30 = subDays(startOfDay(now), 30);
+      const days = Math.min(Math.ceil(rangeDays), 365);
       const buckets = Array.from({ length: days }, (_, i) => {
         const d = subDays(startOfDay(now), days - 1 - i);
         return {
-          date: format(d, days <= 7 ? "EEE" : "M/d"),
+          date: format(d, days <= 7 ? "EEE" : days <= 60 ? "M/d" : "M/d"),
           ts: d.getTime(),
+          dateKey: format(d, "yyyy-MM-dd"),
           Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
         };
       });
+
+      // For the 30-day window: count from live incidents
       for (const inc of incidents) {
-        const t = startOfDay(new Date(inc.time)).getTime();
-        const idx = buckets.findIndex(b => b.ts === t);
-        if (idx >= 0) {
-          buckets[idx][categorize(inc)]++;
-          if (inc.isMajor) buckets[idx].Major++;
-          buckets[idx].total++;
+        const incDay = startOfDay(new Date(inc.time));
+        if (incDay >= cutoff30) {
+          const t = incDay.getTime();
+          const idx = buckets.findIndex(b => b.ts === t);
+          if (idx >= 0) {
+            buckets[idx][categorize(inc)]++;
+            if (inc.isMajor) buckets[idx].Major++;
+            buckets[idx].total++;
+          }
         }
       }
+
+      // For days older than 30 days: pull from daily_stats
+      for (const stat of dailyStatsData) {
+        const statDay = startOfDay(new Date(stat.date + "T12:00:00"));
+        if (statDay < cutoff30) {
+          const idx = buckets.findIndex(b => b.dateKey === stat.date);
+          if (idx >= 0) {
+            const cat = stat.category as keyof typeof CALL_COLORS;
+            if (cat in buckets[idx]) (buckets[idx] as any)[cat] += stat.count;
+            buckets[idx].total += stat.count;
+          }
+        }
+      }
+
       return buckets;
     }
-  }, [incidents, ranged, rangeMinutes, bucketSizeMin, now, rangeDays]);
+  }, [incidents, dailyStatsData, ranged, rangeMinutes, bucketSizeMin, now, rangeDays]);
 
   const trendInterval = trendData.length <= 8 ? 0 : trendData.length <= 24 ? 1 : trendData.length <= 48 ? 3 : trendData.length <= 90 ? 5 : 8;
 

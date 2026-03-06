@@ -430,6 +430,14 @@ function CallListContent({
             <span className="text-foreground font-bold">{incidents.filter(i => showArchived ? !i.active : i.active).length}</span>
           </span>
         </div>
+        {showArchived && (
+          <div className="bg-amber-500/8 border border-amber-500/15 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
+            <AlertTriangle className="w-3 h-3 text-amber-400/70 shrink-0 mt-0.5" />
+            <p className="text-[9px] text-amber-400/70 leading-relaxed">
+              Past calls are stored for <span className="font-bold">30 days</span> then removed. Analytics data is retained indefinitely as daily totals.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 pb-24 space-y-2.5 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>

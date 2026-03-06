@@ -23,6 +23,7 @@ export const incidents = pgTable("incidents", {
   acknowledged: boolean("acknowledged").default(false),
   active: boolean("active").default(true),
   hasHistory: boolean("has_history").default(false),
+  clearedByAdmin: boolean("cleared_by_admin").default(false),
 });
 
 export const incidentHistory = pgTable("incident_history", {
@@ -76,6 +77,16 @@ export type IncidentHistory = typeof incidentHistory.$inferSelect;
 export type AdminCard = typeof adminCards.$inferSelect;
 export type Poll = typeof polls.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
+
+export const dailyStats = pgTable("daily_stats", {
+  id: serial("id").primaryKey(),
+  date: text("date").notNull(),
+  agency: text("agency").notNull(),
+  category: text("category").notNull(),
+  count: integer("count").notNull().default(0),
+});
+
+export type DailyStat = typeof dailyStats.$inferSelect;
 
 export const unitNotes = pgTable("unit_notes", {
   id: serial("id").primaryKey(),

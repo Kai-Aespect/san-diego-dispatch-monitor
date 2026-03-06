@@ -16,6 +16,12 @@ export async function registerRoutes(
     syncData(storage).catch(console.error);
   }, 5000);
 
+  // Prune old incidents every hour
+  setInterval(() => {
+    storage.pruneOldIncidents().catch(console.error);
+  }, 60 * 60 * 1000);
+  storage.pruneOldIncidents().catch(console.error);
+
   app.get(api.incidents.list.path, async (req, res) => {
     const incidents = await storage.getIncidents();
     res.json(incidents);
@@ -224,6 +230,11 @@ export async function registerRoutes(
     const key = await storage.validatePin(pin);
     if (key) res.json({ success: true, name: key.name });
     else res.status(401).json({ success: false });
+  });
+
+  app.get('/api/daily-stats', async (req, res) => {
+    const stats = await storage.getDailyStats();
+    res.json(stats);
   });
 
   return httpServer;

@@ -1,10 +1,12 @@
 import { db } from "./db";
 import {
-  incidents, incidentHistory, adminCards, polls, pollVotes,
+  incidents, incidentHistory, adminCards, polls, pollVotes, dailyStats, unitNotes, authKeys,
   type Incident, type InsertIncident, type IncidentHistory,
   type AdminCard, type InsertAdminCard, type Poll, type InsertPoll, type PollVote,
+  type DailyStat, type UnitNote, type AuthKey, type InsertAuthKey,
 } from "@shared/schema";
-import { eq, desc, and, notInArray, inArray, sql, lt, asc } from "drizzle-orm";
+import { eq, desc, and, notInArray, inArray, sql, lt, asc, gte } from "drizzle-orm";
+import { format, subDays } from "date-fns";
 
 const MAX_HISTORY_PER_INCIDENT = 200;
 
@@ -40,6 +42,11 @@ export interface IStorage {
   createAuthKey(key: InsertAuthKey): Promise<AuthKey>;
   deleteAuthKey(id: number): Promise<void>;
   validatePin(pin: string): Promise<AuthKey | undefined>;
+
+  // Daily stats (forever analytics)
+  getDailyStats(): Promise<DailyStat[]>;
+  aggregateIncidentsIntoDailyStats(incList: Incident[]): Promise<void>;
+  pruneOldIncidents(): Promise<void>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -120,10 +127,12 @@ export class DatabaseStorage implements IStorage {
 
   async clearIncidents(ids: number[]): Promise<void> {
     if (ids.length === 0) return;
+    // Get incidents before clearing so we can aggregate stats
+    const toAggregate = await db.select().from(incidents).where(inArray(incidents.id, ids));
+    await this.aggregateIncidentsIntoDailyStats(toAggregate);
     await db.update(incidents)
-      .set({ active: false })
+      .set({ active: false, clearedByAdmin: true })
       .where(inArray(incidents.id, ids));
-    // Record history
     for (const id of ids) {
       await db.insert(incidentHistory).values({
         incidentId: id,
@@ -148,17 +157,28 @@ export class DatabaseStorage implements IStorage {
   async markMissingAsInactive(activeIds: Set<string>): Promise<void> {
     const ids = Array.from(activeIds);
     if (ids.length === 0) return;
+    // Archive (for stats) any currently-active incidents that disappeared
+    const missing = await db.select().from(incidents)
+      .where(and(eq(incidents.active, true), eq(incidents.clearedByAdmin, false), notInArray(incidents.incidentNo, ids)));
+    if (missing.length > 0) {
+      await this.aggregateIncidentsIntoDailyStats(missing);
+    }
+    // Mark missing as inactive (skip clearedByAdmin ones)
     await db.update(incidents)
       .set({ active: false })
-      .where(and(eq(incidents.active, true), notInArray(incidents.incidentNo, ids)));
+      .where(and(eq(incidents.active, true), eq(incidents.clearedByAdmin, false), notInArray(incidents.incidentNo, ids)));
+    // Re-activate existing non-cleared incidents that are in feed
     await db.update(incidents)
       .set({ active: true })
-      .where(inArray(incidents.incidentNo, ids));
+      .where(and(inArray(incidents.incidentNo, ids), eq(incidents.clearedByAdmin, false)));
   }
 
   async upsertIncident(incident: InsertIncident): Promise<Incident> {
     const existing = await this.getIncidentByNo(incident.incidentNo);
     if (existing) {
+      // Never re-activate an admin-cleared incident
+      if (existing.clearedByAdmin) return existing;
+
       const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
       for (const field of TRACKED_FIELDS) {
         const oldVal = stringify(existing[field]);
@@ -322,10 +342,76 @@ export class DatabaseStorage implements IStorage {
   }
 
   async validatePin(pin: string): Promise<AuthKey | undefined> {
-    // Admin override 3232
     if (pin === "3232") return { id: 0, pin: "3232", name: "Administrator", createdAt: new Date() };
     const [key] = await db.select().from(authKeys).where(eq(authKeys.pin, pin));
     return key;
+  }
+
+  // ── Daily Stats (Forever Analytics) ──────────────────────────
+  async getDailyStats(): Promise<DailyStat[]> {
+    return await db.select().from(dailyStats).orderBy(asc(dailyStats.date));
+  }
+
+  async aggregateIncidentsIntoDailyStats(incList: Incident[]): Promise<void> {
+    if (incList.length === 0) return;
+    // Map category for each incident
+    const categorize = (inc: Incident): string => {
+      if (inc.callTypeFamily === "Medical") return "Medical";
+      if (inc.agency === "fire") {
+        const f = (inc.callTypeFamily ?? "").toLowerCase();
+        const t = inc.callType.toLowerCase();
+        if (f.includes("traffic") || t.includes("traffic") || t.includes("accident")) return "Traffic";
+        return "Fire";
+      }
+      if (inc.agency === "police") {
+        const t = inc.callType.toLowerCase();
+        if (t.includes("traffic") || t.includes("accident") || t.includes("collision")) return "Traffic";
+        return "Police";
+      }
+      return "Other";
+    };
+
+    // Group by date + agency + category
+    const counts: Record<string, Record<string, Record<string, number>>> = {};
+    for (const inc of incList) {
+      const dateStr = format(new Date(inc.time), "yyyy-MM-dd");
+      const cat = categorize(inc);
+      if (!counts[dateStr]) counts[dateStr] = {};
+      if (!counts[dateStr][inc.agency]) counts[dateStr][inc.agency] = {};
+      counts[dateStr][inc.agency][cat] = (counts[dateStr][inc.agency][cat] || 0) + 1;
+    }
+
+    // Upsert each bucket — increment if row exists, insert if not
+    for (const [date, agencies] of Object.entries(counts)) {
+      for (const [agency, cats] of Object.entries(agencies)) {
+        for (const [category, count] of Object.entries(cats)) {
+          const [existing] = await db.select().from(dailyStats)
+            .where(and(eq(dailyStats.date, date), eq(dailyStats.agency, agency), eq(dailyStats.category, category)));
+          if (existing) {
+            await db.update(dailyStats).set({ count: existing.count + count })
+              .where(eq(dailyStats.id, existing.id));
+          } else {
+            await db.insert(dailyStats).values({ date, agency, category, count });
+          }
+        }
+      }
+    }
+  }
+
+  async pruneOldIncidents(): Promise<void> {
+    const cutoff = subDays(new Date(), 30);
+    // Find old inactive incidents to aggregate before deleting
+    const old = await db.select().from(incidents)
+      .where(and(eq(incidents.active, false), lt(incidents.time, cutoff)));
+    if (old.length === 0) return;
+    // Aggregate their stats (idempotent — duplicates won't inflate because we already aggregated on archive)
+    // Actually we skip re-aggregating here since we aggregate on archive. Just delete.
+    const ids = old.map(i => i.id);
+    // Delete history first
+    await db.delete(incidentHistory).where(inArray(incidentHistory.incidentId, ids));
+    // Delete incidents
+    await db.delete(incidents).where(inArray(incidents.id, ids));
+    console.log(`Pruned ${ids.length} incidents older than 30 days`);
   }
 }
 
