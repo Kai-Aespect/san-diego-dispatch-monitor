@@ -112,7 +112,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
             )}
             {isNew && (
               <span className="text-[9px] font-bold uppercase tracking-wider font-mono px-1.5 py-0.5 rounded-md"
-                style={{ background: `${style.accent}22`, color: style.pillText, border: `1px solid ${style.accent}40` }}>
+                style={{ background: 'rgba(245,158,11,0.15)', color: '#fcd34d', border: '1px solid rgba(245,158,11,0.3)' }}>
                 NEW
               </span>
             )}
@@ -133,10 +133,9 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
               <button
                 onClick={handleAcknowledge}
                 disabled={isAcknowledging}
-                className="h-6 px-2 text-[9px] font-bold rounded-lg flex items-center gap-1 transition-all"
-                style={{ background: `${style.accent}20`, color: style.pillText, border: `1px solid ${style.accent}35` }}
+                className="h-6 px-2 text-[9px] font-bold rounded-lg flex items-center gap-1 transition-all bg-blue-500/20 text-blue-400 border border-blue-500/35 hover:bg-blue-500/30"
               >
-                <CheckCircle2 className="w-3 h-3" /> ACK
+                <CheckCircle2 className="w-3 h-3" /> Acknowledge
               </button>
             )}
             <button
