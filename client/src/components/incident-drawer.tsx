@@ -54,6 +54,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const [activeTab, setActiveTab] = useState("details");
   const [pin, setPin] = useState("");
   const [unlocked, setUnlocked] = useState(false);
+  const [pinError, setPinError] = useState("");
   const { isBookmarked, toggleBookmark } = useBookmarks();
 
   const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
@@ -75,6 +76,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
       setTags(incident.tags || []);
       setUnlocked(false);
       setPin("");
+      setPinError("");
     }
   }, [incident?.id]);
 
@@ -98,8 +100,9 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
         refetchHistory();
         setUnlocked(false);
         setPin("");
+        setPinError("");
       } else {
-        toast({ title: "Error", description: "Invalid Key PIN", variant: "destructive" });
+        setPinError("Invalid Key PIN — try again.");
       }
     } catch (e) {
       console.error("Save failed", e);
@@ -277,31 +280,43 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                     <Lock className="w-4 h-4" />
                     <span className="text-[11px] font-bold uppercase tracking-wider">Editing Locked</span>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      maxLength={6}
-                      value={pin}
-                      onChange={e => setPin(e.target.value)}
-                      placeholder="PIN"
-                      className="w-16 bg-black/20 border border-white/10 rounded px-2 py-1 text-xs font-mono"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                      onClick={async () => {
-                        const res = await fetch('/api/validate-pin', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ pin })
-                        });
-                        if (res.ok) setUnlocked(true);
-                        else toast({ title: "Error", description: "Invalid PIN", variant: "destructive" });
-                      }}
-                    >
-                      Unlock
-                    </Button>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        maxLength={6}
+                        value={pin}
+                        onChange={e => { setPin(e.target.value); setPinError(""); }}
+                        placeholder="PIN"
+                        className={cn(
+                          "w-16 bg-black/20 border rounded px-2 py-1 text-xs font-mono",
+                          pinError ? "border-red-500/60" : "border-white/10"
+                        )}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                        onClick={async () => {
+                          setPinError("");
+                          const res = await fetch('/api/validate-pin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pin })
+                          });
+                          if (res.ok) { setUnlocked(true); setPinError(""); }
+                          else setPinError("Invalid PIN — try again.");
+                        }}
+                      >
+                        Unlock
+                      </Button>
+                    </div>
+                    {pinError && (
+                      <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                        {pinError}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

@@ -274,23 +274,29 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
   const activeCount = filtered.filter(u => activeUnitMap.has(u.id)).length;
 
   const selectedUnit = SD_UNITS.find(u => u.id === selectedUnitId);
+  const effectiveUnit = selectedUnit ?? (selectedUnitId ? {
+    id: selectedUnitId,
+    type: "Unit",
+    description: "No additional information on file for this unit.",
+    category: "special" as const,
+  } : null);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
       {/* ── Unit History Overlay ── */}
-      {selectedUnitId && selectedUnit && (
+      {selectedUnitId && effectiveUnit && (
         <div className="absolute inset-0 z-20 bg-[#0a0c14] dark:bg-[#0a0c14] flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
           <div className="px-3 py-3 border-b border-white/10 flex items-center justify-between shrink-0 bg-background/80 backdrop-blur-md">
             <div className="flex items-center gap-2">
-              <div className={cn("p-1 rounded-md bg-white/5", UNIT_CATEGORY_COLORS[selectedUnit.category].text)}>
+              <div className={cn("p-1 rounded-md bg-white/5", UNIT_CATEGORY_COLORS[effectiveUnit.category].text)}>
                 {(() => {
-                  const Icon = CATEGORY_ICONS[selectedUnit.category];
+                  const Icon = CATEGORY_ICONS[effectiveUnit.category];
                   return <Icon className="w-4 h-4" />;
                 })()}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-foreground leading-tight">{selectedUnit.id}</h3>
-                <p className="text-[10px] text-muted-foreground/60">{selectedUnit.type}</p>
+                <h3 className="text-sm font-bold text-foreground leading-tight">{effectiveUnit.id}</h3>
+                <p className="text-[10px] text-muted-foreground/60">{effectiveUnit.type}</p>
               </div>
             </div>
             <button
@@ -305,11 +311,11 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
             <div>
               <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</p>
               <p className="text-xs text-foreground/80 leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 italic">
-                {selectedUnit.description}
+                {effectiveUnit.description}
               </p>
             </div>
 
-            <UnitPublicNotes unitId={selectedUnit.id} />
+            <UnitPublicNotes unitId={effectiveUnit.id} />
 
             <div className="space-y-2 pb-6">
               <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
