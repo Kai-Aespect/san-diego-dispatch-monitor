@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { type IncidentListResponse } from "@shared/routes";
-import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind } from "lucide-react";
+import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UnitsPanelProps {
@@ -139,6 +139,7 @@ const SD_UNITS: UnitDefinition[] = [
 export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
   const activeIncidents = incidents.filter(i => i.active);
 
@@ -152,6 +153,13 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
     return map;
   }, [activeIncidents]);
 
+  const unitHistory = useMemo(() => {
+    if (!selectedUnitId) return [];
+    return incidents
+      .filter(i => i.units?.includes(selectedUnitId))
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  }, [incidents, selectedUnitId]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return SD_UNITS.filter(u => {
@@ -163,8 +171,86 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
 
   const activeCount = filtered.filter(u => activeUnitMap.has(u.id)).length;
 
+  const selectedUnit = SD_UNITS.find(u => u.id === selectedUnitId);
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* ── Unit History Overlay ── */}
+      {selectedUnitId && selectedUnit && (
+        <div className="absolute inset-0 z-10 bg-[#0a0c14] flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
+          <div className="px-3 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <div className={cn("p-1 rounded-md bg-white/5", UNIT_CATEGORY_COLORS[selectedUnit.category].text)}>
+                {(() => {
+                  const Icon = CATEGORY_ICONS[selectedUnit.category];
+                  return <Icon className="w-4 h-4" />;
+                })()}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground leading-tight">{selectedUnit.id}</h3>
+                <p className="text-[10px] text-muted-foreground/60">{selectedUnit.type}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedUnitId(null)}
+              className="p-1.5 rounded-full hover:bg-white/10 text-muted-foreground transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</p>
+              <p className="text-xs text-foreground/80 leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 italic">
+                {selectedUnit.description}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                <History className="w-3.5 h-3.5" />
+                Call History ({unitHistory.length})
+              </div>
+              <div className="space-y-1.5">
+                {unitHistory.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground/30 text-[11px] border border-dashed border-white/10 rounded-lg">
+                    No recent history found.
+                  </div>
+                ) : (
+                  unitHistory.map(inc => (
+                    <div
+                      key={inc.id}
+                      onClick={() => onSelectIncident(inc)}
+                      className={cn(
+                        "group p-2 rounded-lg border transition-all cursor-pointer hover:brightness-110",
+                        inc.active ? "bg-emerald-500/10 border-emerald-500/20" : "bg-white/5 border-white/5 hover:border-white/10"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={cn("text-[11px] font-bold", inc.active ? "text-emerald-400" : "text-foreground/80")}>
+                          {inc.callType}
+                        </span>
+                        <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">
+                          {new Date(inc.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{inc.location}</p>
+                      {inc.active && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-[9px] font-bold text-emerald-400">CURRENTLY ON SCENE</span>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-3 pt-3 pb-2 border-b border-white/5 space-y-2 shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-mono text-muted-foreground">
@@ -209,11 +295,11 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
           return (
             <div
               key={unit.id}
-              onClick={activeInc ? () => onSelectIncident(activeInc) : undefined}
+              onClick={() => setSelectedUnitId(unit.id)}
               className={cn(
-                "flex items-start gap-2.5 px-2.5 py-2 rounded-lg border text-xs transition-all",
+                "flex items-start gap-2.5 px-2.5 py-2 rounded-lg border text-xs transition-all cursor-pointer",
                 colors.bg, colors.border,
-                activeInc ? "cursor-pointer hover:brightness-125" : "cursor-default"
+                "hover:brightness-125"
               )}
             >
               <div className={cn("mt-0.5 shrink-0", colors.text)}>
