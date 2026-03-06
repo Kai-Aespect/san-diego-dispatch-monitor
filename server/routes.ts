@@ -24,7 +24,14 @@ export async function registerRoutes(
   app.patch(api.incidents.update.path, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const input = api.incidents.update.input.parse(req.body);
+      const { pin, ...input } = req.body;
+      
+      // If updating notes or tags, require pin
+      if (input.notes !== undefined || input.tags !== undefined) {
+        const key = await storage.validatePin(pin);
+        if (!key) return res.status(401).json({ message: 'Invalid Key PIN' });
+      }
+
       const updated = await storage.updateIncident(id, input);
       res.json(updated);
     } catch (err: any) {
@@ -175,6 +182,48 @@ export async function registerRoutes(
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
+  });
+
+  // ── Unit Notes ──────────────────────────────────────────────
+  app.get('/api/units/:unitId/note', async (req, res) => {
+    const note = await storage.getUnitNote(req.params.unitId);
+    res.json(note || { content: "" });
+  });
+
+  app.post('/api/units/:unitId/note', async (req, res) => {
+    const { content, pin } = req.body;
+    const key = await storage.validatePin(pin);
+    if (!key) return res.status(401).json({ message: 'Invalid Key PIN' });
+    const note = await storage.upsertUnitNote(req.params.unitId, content);
+    res.json(note);
+  });
+
+  // ── Auth Keys ──────────────────────────────────────────────
+  app.get('/api/admin/keys', async (req, res) => {
+    const keys = await storage.getAuthKeys();
+    res.json(keys);
+  });
+
+  app.post('/api/admin/keys', async (req, res) => {
+    try {
+      const input = req.body;
+      const key = await storage.createAuthKey(input);
+      res.json(key);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.delete('/api/admin/keys/:id', async (req, res) => {
+    await storage.deleteAuthKey(parseInt(req.params.id));
+    res.json({ success: true });
+  });
+
+  app.post('/api/validate-pin', async (req, res) => {
+    const { pin } = req.body;
+    const key = await storage.validatePin(pin);
+    if (key) res.json({ success: true, name: key.name });
+    else res.status(401).json({ success: false });
   });
 
   return httpServer;

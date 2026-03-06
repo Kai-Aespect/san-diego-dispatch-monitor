@@ -31,7 +31,15 @@ export interface IStorage {
   getPollResults(pollId: number): Promise<Record<string, number>>;
   vote(pollId: number, option: string, voterToken: string): Promise<{ success: boolean; alreadyVoted: boolean }>;
   getVoterChoice(pollId: number, voterToken: string): Promise<string | null>;
-  updatePoll(id: number, updates: { question?: string; options?: string[] }): Promise<Poll>;
+  // Unit notes
+  getUnitNote(unitId: string): Promise<UnitNote | undefined>;
+  upsertUnitNote(unitId: string, content: string): Promise<UnitNote>;
+
+  // Auth keys
+  getAuthKeys(): Promise<AuthKey[]>;
+  createAuthKey(key: InsertAuthKey): Promise<AuthKey>;
+  deleteAuthKey(id: number): Promise<void>;
+  validatePin(pin: string): Promise<AuthKey | undefined>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -281,6 +289,43 @@ export class DatabaseStorage implements IStorage {
   async updatePoll(id: number, updates: { question?: string; options?: string[] }): Promise<Poll> {
     const [updated] = await db.update(polls).set(updates).where(eq(polls.id, id)).returning();
     return updated;
+  }
+
+  // ── Unit Notes ──────────────────────────────────────────────
+  async getUnitNote(unitId: string): Promise<UnitNote | undefined> {
+    const [note] = await db.select().from(unitNotes).where(eq(unitNotes.unitId, unitId));
+    return note;
+  }
+
+  async upsertUnitNote(unitId: string, content: string): Promise<UnitNote> {
+    const existing = await this.getUnitNote(unitId);
+    if (existing) {
+      const [updated] = await db.update(unitNotes).set({ content, lastUpdated: new Date() }).where(eq(unitNotes.unitId, unitId)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(unitNotes).values({ unitId, content }).returning();
+    return created;
+  }
+
+  // ── Auth Keys ──────────────────────────────────────────────
+  async getAuthKeys(): Promise<AuthKey[]> {
+    return await db.select().from(authKeys).orderBy(desc(authKeys.createdAt));
+  }
+
+  async createAuthKey(key: InsertAuthKey): Promise<AuthKey> {
+    const [created] = await db.insert(authKeys).values(key).returning();
+    return created;
+  }
+
+  async deleteAuthKey(id: number): Promise<void> {
+    await db.delete(authKeys).where(eq(authKeys.id, id));
+  }
+
+  async validatePin(pin: string): Promise<AuthKey | undefined> {
+    // Admin override 3232
+    if (pin === "3232") return { id: 0, pin: "3232", name: "Administrator", createdAt: new Date() };
+    const [key] = await db.select().from(authKeys).where(eq(authKeys.pin, pin));
+    return key;
   }
 }
 

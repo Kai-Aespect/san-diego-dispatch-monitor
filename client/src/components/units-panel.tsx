@@ -136,6 +136,90 @@ const SD_UNITS: UnitDefinition[] = [
   { id: "SDPD-BOMB", type: "Bomb Squad",         category: "police", description: "Bomb Disposal Unit — explosive ordinance disposal, IED response" },
 ];
 
+function UnitPublicNotes({ unitId }: { unitId: string }) {
+  const { data: note, refetch } = useQuery<{ content: string }>({ queryKey: [`/api/units/${unitId}/note`] });
+  const [isEditing, setIsSaving] = useState(false);
+  const [content, setContent] = useState("");
+  const [pin, setPin] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
+
+  useEffect(() => {
+    if (note) setContent(note.content);
+  }, [note]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/units/${unitId}/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, pin }),
+      });
+      if (res.ok) {
+        refetch();
+        setUnlocked(false);
+        setPin("");
+      } else {
+        alert("Invalid Key PIN");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Unit Notes & Location Info</p>
+      {!unlocked ? (
+        <div className="bg-white/5 p-3 rounded-lg border border-white/5 space-y-2">
+          {note?.content ? (
+            <p className="text-xs text-foreground/70 whitespace-pre-wrap">{note.content}</p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground/40 italic">No notes for this unit.</p>
+          )}
+          <button
+            onClick={() => setUnlocked(true)}
+            className="text-[10px] text-primary hover:underline flex items-center gap-1"
+          >
+            <Unlock className="w-3 h-3" /> Edit Notes (Requires Key)
+          </button>
+        </div>
+      ) : (
+        <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full bg-black/20 border border-white/10 rounded p-2 text-xs min-h-[80px] text-foreground focus:outline-none"
+            placeholder="Enter unit notes, equipment details, or base location..."
+          />
+          <div className="flex gap-2">
+            <input
+              type="password"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              className="w-24 bg-black/20 border border-white/10 rounded px-2 py-1 text-xs font-mono"
+              placeholder="Key PIN"
+            />
+            <button
+              onClick={handleSave}
+              disabled={isEditing}
+              className="flex-1 bg-primary/20 text-primary border border-primary/30 rounded text-[10px] font-bold py-1 hover:bg-primary/30"
+            >
+              {isEditing ? "SAVING..." : "SAVE NOTES"}
+            </button>
+            <button onClick={() => setUnlocked(false)} className="px-2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -174,11 +258,11 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
   const selectedUnit = SD_UNITS.find(u => u.id === selectedUnitId);
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full relative overflow-hidden">
       {/* ── Unit History Overlay ── */}
       {selectedUnitId && selectedUnit && (
-        <div className="absolute inset-0 z-10 bg-[#0a0c14] flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
-          <div className="px-3 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="absolute inset-0 z-20 bg-[#0a0c14] dark:bg-[#0a0c14] flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
+          <div className="px-3 py-3 border-b border-white/10 flex items-center justify-between shrink-0 bg-background/80 backdrop-blur-md">
             <div className="flex items-center gap-2">
               <div className={cn("p-1 rounded-md bg-white/5", UNIT_CATEGORY_COLORS[selectedUnit.category].text)}>
                 {(() => {
@@ -199,7 +283,7 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</p>
               <p className="text-xs text-foreground/80 leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 italic">
@@ -207,7 +291,9 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
               </p>
             </div>
 
-            <div className="space-y-2">
+            <UnitPublicNotes unitId={selectedUnit.id} />
+
+            <div className="space-y-2 pb-6">
               <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 <History className="w-3.5 h-3.5" />
                 Call History ({unitHistory.length})

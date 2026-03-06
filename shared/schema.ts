@@ -77,6 +77,24 @@ export type AdminCard = typeof adminCards.$inferSelect;
 export type Poll = typeof polls.$inferSelect;
 export type PollVote = typeof pollVotes.$inferSelect;
 
-export type CreateIncidentRequest = InsertIncident;
-export type UpdateIncidentRequest = Partial<InsertIncident>;
-export type IncidentResponse = Incident;
+export const unitNotes = pgTable("unit_notes", {
+  id: serial("id").primaryKey(),
+  unitId: text("unit_id").notNull().unique(),
+  content: text("content").notNull().default(""),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+});
+
+export const authKeys = pgTable("auth_keys", {
+  id: serial("id").primaryKey(),
+  pin: text("pin").notNull().unique(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUnitNoteSchema = createInsertSchema(unitNotes).omit({ id: true, lastUpdated: true });
+export const insertAuthKeySchema = createInsertSchema(authKeys).omit({ id: true, createdAt: true });
+
+export type UnitNote = typeof unitNotes.$inferSelect;
+export type AuthKey = typeof authKeys.$inferSelect;
+export type InsertUnitNote = z.infer<typeof insertUnitNoteSchema>;
+export type InsertAuthKey = z.infer<typeof insertAuthKeySchema>;

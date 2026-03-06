@@ -112,7 +112,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
   const { isAdmin } = useAdminAuth();
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
-  const [section, setSection] = useState<"board" | "calls">("board");
+  const [section, setSection] = useState<"board" | "calls" | "keys">("board");
 
   const handlePinSubmit = () => {
     if (checkPin(pinInput)) {
@@ -184,12 +184,20 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
         >
           Clear Calls
         </button>
+        <button
+          onClick={() => setSection("keys")}
+          className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "keys" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
+        >
+          Manage Keys
+        </button>
       </div>
 
       {section === "board" ? (
         <AdminBoardSection />
-      ) : (
+      ) : section === "calls" ? (
         <ClearCallsSection incidents={incidents} />
+      ) : (
+        <AdminKeysSection />
       )}
     </div>
   );
@@ -492,6 +500,81 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
       <div className="flex gap-2">
         <Button size="sm" className="flex-1 h-7 text-xs" onClick={save}><Save className="w-3 h-3 mr-1" /> Save</Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+function AdminKeysSection() {
+  const queryClient = useQueryClient();
+  const { data: keys = [] } = useQuery<AuthKey[]>({ queryKey: ['/api/admin/keys'] });
+  const [newPin, setNewPin] = useState("");
+  const [newName, setNewName] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  const addKey = async () => {
+    if (!newPin || newPin.length < 4 || !newName) return;
+    setIsAdding(true);
+    try {
+      await fetch('/api/admin/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: newPin, name: newName }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/keys'] });
+      setNewPin("");
+      setNewName("");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const deleteKey = async (id: number) => {
+    await fetch(`/api/admin/keys/${id}`, { method: 'DELETE' });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/keys'] });
+  };
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="p-4 space-y-4">
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-3">
+          <h4 className="text-xs font-bold text-primary uppercase">Add New Key</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground uppercase font-bold">Owner Name</label>
+              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. John Doe" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground uppercase font-bold">PIN (4-6 digits)</label>
+              <Input value={newPin} onChange={e => setNewPin(e.target.value)} maxLength={6} placeholder="1234" className="h-8 text-xs font-mono" />
+            </div>
+          </div>
+          <Button onClick={addKey} disabled={isAdding || newPin.length < 4 || !newName} className="w-full h-8 text-xs">
+            <Plus className="w-3 h-3 mr-1" /> Add Authorized Key
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Active Keys</h4>
+          <div className="space-y-1.5">
+            {keys.map(k => (
+              <div key={k.id} className="bg-white/5 border border-white/10 rounded-lg p-2.5 flex items-center justify-between group">
+                <div>
+                  <p className="text-xs font-bold text-foreground">{k.name}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">PIN: •••• {k.pin.slice(-2)}</p>
+                </div>
+                <button onClick={() => deleteKey(k.id)} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {keys.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground/30 text-xs italic border border-dashed border-white/10 rounded-lg">
+                No custom keys configured yet.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

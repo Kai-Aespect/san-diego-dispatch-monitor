@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { type IncidentListResponse } from "@shared/routes";
-import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight, Bookmark, BookmarkCheck } from "lucide-react";
+import { MapPin, Shield, Flame, Clock, Copy, Navigation, Plus, X, History, RefreshCw, ArrowRight, Bookmark, BookmarkCheck, Lock, Unlock, Save } from "lucide-react";
 import { getCallDescription } from "@/lib/call-descriptions";
 import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -88,23 +88,37 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
 
   const bookmarked = isBookmarked(incident.id);
 
+  const [pin, setPin] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
+
   const handleSave = async () => {
     if (isSaving) return;
+    if (!unlocked && (notes !== (incident.notes || "") || JSON.stringify(tags) !== JSON.stringify(incident.tags || []))) {
+      // Need unlock
+      return;
+    }
     setIsSaving(true);
     try {
-      await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags });
-      queryClient.setQueryData(["/api/incidents"], (old: any) =>
-        old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
-      );
-      refetchHistory();
+      const res = await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags, pin });
+      if (res.ok) {
+        queryClient.setQueryData(["/api/incidents"], (old: any) =>
+          old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
+        );
+        refetchHistory();
+        setUnlocked(false);
+        setPin("");
+      } else {
+        toast({ title: "Error", description: "Invalid Key PIN", variant: "destructive" });
+      }
     } catch (e) {
-      console.error("Auto-save failed", e);
+      console.error("Save failed", e);
     } finally {
       setIsSaving(false);
     }
   };
 
   const addTag = (tag: string) => {
+    if (!unlocked) { toast({ title: "Locked", description: "Unlock with your Key PIN to edit." }); return; }
     const cleanTag = tag.trim();
     if (cleanTag && !tags.includes(cleanTag)) {
       setTags([...tags, cleanTag]);
@@ -112,7 +126,10 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     }
   };
 
-  const removeTag = (tag: string) => setTags(tags.filter(t => t !== tag));
+  const removeTag = (tag: string) => {
+    if (!unlocked) { toast({ title: "Locked", description: "Unlock with your Key PIN to edit." }); return; }
+    setTags(tags.filter(t => t !== tag));
+  };
 
   const isFire = incident.agency.toLowerCase() === 'fire';
   const agencyIcon = isFire ? <Flame className="w-5 h-5" /> : <Shield className="w-5 h-5" />;
@@ -263,17 +280,59 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
             </TabsContent>
 
             <TabsContent value="notes" className="p-6 pt-4 space-y-4 m-0">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Incident Notes</label>
+              {!unlocked && (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-amber-400">
+                    <Lock className="w-4 h-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Editing Locked</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      maxLength={6}
+                      value={pin}
+                      onChange={e => setPin(e.target.value)}
+                      placeholder="PIN"
+                      className="w-16 bg-black/20 border border-white/10 rounded px-2 py-1 text-xs font-mono"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                      onClick={async () => {
+                        const res = await fetch('/api/validate-pin', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ pin })
+                        });
+                        if (res.ok) setUnlocked(true);
+                        else toast({ title: "Error", description: "Invalid PIN", variant: "destructive" });
+                      }}
+                    >
+                      Unlock
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className={cn(!unlocked && "opacity-50 pointer-events-none")}>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Incident Notes</label>
+                  {unlocked && (
+                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSave} disabled={isSaving}>
+                      <Save className="w-3 h-3 mr-1" /> {isSaving ? "Saving..." : "Save Changes"}
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Type notes here... changes auto-save"
+                  placeholder="Type notes here..."
                   className="bg-background/50 border-white/10 min-h-[120px] text-sm focus-visible:ring-primary/30"
                 />
               </div>
 
-              <div>
+              <div className={cn(!unlocked && "opacity-50 pointer-events-none")}>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Quick Tags</label>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {defaultTags.map(tag => (
