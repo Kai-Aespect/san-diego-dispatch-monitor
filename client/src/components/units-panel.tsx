@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { type IncidentListResponse } from "@shared/routes";
-import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X } from "lucide-react";
+import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UnitsPanelProps {
