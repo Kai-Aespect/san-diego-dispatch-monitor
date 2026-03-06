@@ -166,5 +166,16 @@ export async function registerRoutes(
     }
   });
 
+  app.patch('/api/polls/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { question, options } = req.body;
+      const updated = await storage.updatePoll(id, { question, options });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
   return httpServer;
 }

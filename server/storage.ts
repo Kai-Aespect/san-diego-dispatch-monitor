@@ -31,6 +31,7 @@ export interface IStorage {
   getPollResults(pollId: number): Promise<Record<string, number>>;
   vote(pollId: number, option: string, voterToken: string): Promise<{ success: boolean; alreadyVoted: boolean }>;
   getVoterChoice(pollId: number, voterToken: string): Promise<string | null>;
+  updatePoll(id: number, updates: { question?: string; options?: string[] }): Promise<Poll>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -274,6 +275,11 @@ export class DatabaseStorage implements IStorage {
     const [row] = await db.select().from(pollVotes)
       .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.voterToken, voterToken)));
     return row?.option ?? null;
+  }
+
+  async updatePoll(id: number, updates: { question?: string; options?: string[] }): Promise<Poll> {
+    const [updated] = await db.update(polls).set(updates).where(eq(polls.id, id)).returning();
+    return updated;
   }
 }
 

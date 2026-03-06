@@ -396,12 +396,45 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   const [url, setUrl] = useState(card.url || "");
   const [color, setColor] = useState(card.color);
 
+  // Poll-specific state — loaded from the live poll if this card has one
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollLoaded, setPollLoaded] = useState(false);
+
+  useEffect(() => {
+    if (card.type === "poll" && card.pollId && !pollLoaded) {
+      fetch(`/api/polls/${card.pollId}/results`)
+        .then(r => r.json())
+        .then(data => {
+          setPollQuestion(data.poll?.question ?? "");
+          setPollOptions(data.poll?.options ?? ["", ""]);
+          setPollLoaded(true);
+        })
+        .catch(() => setPollLoaded(true));
+    }
+  }, [card.type, card.pollId, pollLoaded]);
+
   const save = async () => {
+    const cardBody: Record<string, unknown> = { title, color };
+    if (card.type !== "poll") cardBody.content = content;
+    if (card.type === "link") cardBody.url = url || undefined;
+
     await fetch(`/api/admin/cards/${card.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, content, url: url || undefined, color }),
+      body: JSON.stringify(cardBody),
     });
+
+    if (card.type === "poll" && card.pollId) {
+      const opts = pollOptions.filter(o => o.trim());
+      if (opts.length >= 2 && pollQuestion.trim()) {
+        await fetch(`/api/polls/${card.pollId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: pollQuestion, options: opts }),
+        });
+      }
+    }
     onSave();
   };
 
@@ -419,6 +452,42 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
       )}
       {card.type === "link" && (
         <Input value={url} onChange={(e) => setUrl(e.target.value)} className="h-8 text-sm bg-accent/20 border-white/10 font-mono" placeholder="https://..." />
+      )}
+      {card.type === "poll" && (
+        <div className="space-y-1.5">
+          {!pollLoaded ? (
+            <p className="text-xs text-muted-foreground">Loading poll…</p>
+          ) : (
+            <>
+              <Input placeholder="Poll question..." value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                className="h-8 text-sm bg-accent/20 border-white/10" />
+              {pollOptions.map((opt, i) => (
+                <div key={i} className="flex gap-1.5">
+                  <Input placeholder={`Option ${i + 1}...`} value={opt}
+                    onChange={(e) => {
+                      const opts = [...pollOptions];
+                      opts[i] = e.target.value;
+                      setPollOptions(opts);
+                    }}
+                    className="h-7 text-xs bg-accent/20 border-white/10 flex-1" />
+                  {pollOptions.length > 2 && (
+                    <button onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}
+                      className="text-muted-foreground hover:text-destructive">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {pollOptions.length < 8 && (
+                <button onClick={() => setPollOptions([...pollOptions, ""])}
+                  className="text-xs text-primary hover:underline flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Add option
+                </button>
+              )}
+            </>
+          )}
+        </div>
       )}
       <div className="flex gap-2">
         <Button size="sm" className="flex-1 h-7 text-xs" onClick={save}><Save className="w-3 h-3 mr-1" /> Save</Button>
