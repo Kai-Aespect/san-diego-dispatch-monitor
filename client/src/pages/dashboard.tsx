@@ -5,8 +5,7 @@ import { IncidentCard } from "@/components/incident-card";
 import { IncidentMap } from "@/components/incident-map";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
-import { UnitDialog } from "@/components/unit-dialog";
-import { SidePanel } from "@/components/side-panel";
+import { SidePanel, type PanelTab } from "@/components/side-panel";
 import { AudioNotifier } from "@/components/audio-notifier";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
 import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff, Menu } from "lucide-react";
@@ -112,8 +111,8 @@ export default function Dashboard() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
-  const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false);
+  const [sidePanelTab, setSidePanelTab] = useState<PanelTab>("bookmarks");
+  const [focusUnitId, setFocusUnitId] = useState<string | null>(null);
 
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
 
@@ -200,8 +199,8 @@ export default function Dashboard() {
 
   const handleUnitClick = (e: React.MouseEvent, unit: string) => {
     e.stopPropagation();
-    setSelectedUnit(unit);
-    setIsUnitDialogOpen(true);
+    setFocusUnitId(unit);
+    setSidePanelTab("units");
   };
 
   const callListProps = {
@@ -265,6 +264,9 @@ export default function Dashboard() {
           <SidePanel
             incidents={incidents}
             onSelectIncident={handleIncidentClick}
+            activeTab={sidePanelTab}
+            setActiveTab={setSidePanelTab}
+            focusUnitId={focusUnitId}
           />
         </div>
       </main>
@@ -315,6 +317,9 @@ export default function Dashboard() {
               <SidePanel
                 incidents={incidents}
                 onSelectIncident={handleIncidentClick}
+                activeTab={sidePanelTab}
+                setActiveTab={setSidePanelTab}
+                focusUnitId={focusUnitId}
               />
             </SheetContent>
           </Sheet>
@@ -330,15 +335,6 @@ export default function Dashboard() {
         }}
       />
 
-      <UnitDialog
-        unit={selectedUnit}
-        isOpen={isUnitDialogOpen}
-        onOpenChange={(open) => {
-          setIsUnitDialogOpen(open);
-          if (!open) setSelectedUnit(null);
-        }}
-        allIncidents={incidents}
-      />
     </div>
   );
 }

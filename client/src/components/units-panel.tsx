@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 interface UnitsPanelProps {
   incidents: IncidentListResponse;
   onSelectIncident: (inc: IncidentListResponse[0]) => void;
+  focusUnitId?: string | null;
 }
 
 interface UnitDefinition {
@@ -143,6 +144,7 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
   const [content, setContent] = useState("");
   const [pin, setPin] = useState("");
   const [unlocked, setUnlocked] = useState(false);
+  const [pinError, setPinError] = useState("");
 
   useEffect(() => {
     if (note) setContent(note.content);
@@ -150,6 +152,7 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
 
   const handleSave = async () => {
     setIsSaving(true);
+    setPinError("");
     try {
       const res = await fetch(`/api/units/${unitId}/note`, {
         method: "POST",
@@ -160,8 +163,9 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
         refetch();
         setUnlocked(false);
         setPin("");
+        setPinError("");
       } else {
-        alert("Invalid Key PIN");
+        setPinError("Invalid Key PIN — try again.");
       }
     } catch (e) {
       console.error(e);
@@ -200,8 +204,11 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
               type="password"
               maxLength={6}
               value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-24 bg-black/20 border border-white/10 rounded px-2 py-1 text-xs font-mono"
+              onChange={(e) => { setPin(e.target.value); setPinError(""); }}
+              className={cn(
+                "w-24 bg-black/20 border rounded px-2 py-1 text-xs font-mono",
+                pinError ? "border-red-500/60" : "border-white/10"
+              )}
               placeholder="Key PIN"
             />
             <button
@@ -211,20 +218,30 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
             >
               {isEditing ? "SAVING..." : "SAVE NOTES"}
             </button>
-            <button onClick={() => setUnlocked(false)} className="px-2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => { setUnlocked(false); setPinError(""); }} className="px-2 text-muted-foreground hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           </div>
+          {pinError && (
+            <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+              {pinError}
+            </p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
+export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPanelProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (focusUnitId) setSelectedUnitId(focusUnitId);
+  }, [focusUnitId]);
 
   const activeIncidents = incidents.filter(i => i.active);
 

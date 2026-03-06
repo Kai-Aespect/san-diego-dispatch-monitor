@@ -13,15 +13,20 @@ import { useBookmarks } from "@/hooks/use-bookmarks";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "bookmarks" | "notes" | "units" | "analytics" | "info" | "reference" | "admin" | "settings";
+export type PanelTab = "bookmarks" | "notes" | "units" | "analytics" | "info" | "reference" | "admin" | "settings";
 
 interface SidePanelProps {
   incidents: IncidentListResponse;
   onSelectIncident: (inc: IncidentListResponse[0]) => void;
+  activeTab?: PanelTab;
+  setActiveTab?: (t: PanelTab) => void;
+  focusUnitId?: string | null;
 }
 
-export function SidePanel({ incidents, onSelectIncident }: SidePanelProps) {
-  const [activeTab, setActiveTab] = useState<PanelTab>("bookmarks");
+export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTab, setActiveTab: setControlledTab, focusUnitId }: SidePanelProps) {
+  const [internalTab, setInternalTab] = useState<PanelTab>("bookmarks");
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = setControlledTab ?? setInternalTab;
   const { bookmarkedIds } = useBookmarks();
   const { isAdmin } = useAdminAuth();
 
@@ -53,7 +58,7 @@ export function SidePanel({ incidents, onSelectIncident }: SidePanelProps) {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {activeTab === "bookmarks" && <BookmarksPanel incidents={incidents} onSelectIncident={onSelectIncident} />}
         {activeTab === "notes"     && <LocalNotes incidents={incidents} />}
-        {activeTab === "units"     && <UnitsPanel incidents={incidents} onSelectIncident={onSelectIncident} />}
+        {activeTab === "units"     && <UnitsPanel incidents={incidents} onSelectIncident={onSelectIncident} focusUnitId={focusUnitId} />}
         {activeTab === "analytics" && <AnalyticsPanel incidents={incidents} />}
         {activeTab === "info" && (
           <div className="flex flex-col h-full">
