@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthKey, AuthPrompt } from "@/hooks/use-auth-key";
 import { type IncidentListResponse } from "@shared/routes";
-import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock, Lock } from "lucide-react";
+import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock, Lock, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
 
