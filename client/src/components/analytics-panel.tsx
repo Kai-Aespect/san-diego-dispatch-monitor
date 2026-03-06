@@ -1,18 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
 } from "recharts";
 import { type IncidentListResponse } from "@shared/routes";
-import { differenceInHours, differenceInDays, format, startOfDay, subDays, getHours } from "date-fns";
+import { differenceInMinutes, format, startOfHour, subHours, startOfDay, subDays, getHours } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown } from "lucide-react";
 
 interface AnalyticsPanelProps {
   incidents: IncidentListResponse;
 }
-
-type TimeRange = "1d" | "7d" | "30d" | "365d";
 
 const CALL_COLORS = {
   Medical:  "#34d399",
@@ -30,6 +28,26 @@ const PERIODS = [
   { label: "Evening",   hours: [18,19,20,21,22,23], icon: "🌆" },
 ];
 
+const PRESETS: { label: string; minutes: number }[] = [
+  { label: "1m",   minutes: 1 },
+  { label: "15m",  minutes: 15 },
+  { label: "1H",   minutes: 60 },
+  { label: "6H",   minutes: 360 },
+  { label: "24H",  minutes: 1440 },
+  { label: "7D",   minutes: 10080 },
+  { label: "30D",  minutes: 43200 },
+  { label: "1Y",   minutes: 525600 },
+];
+
+type Unit = "min" | "hr" | "day";
+
+function minutesToLabel(m: number): string {
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return m % 60 === 0 ? `${m / 60}H` : `${(m / 60).toFixed(1)}H`;
+  const d = m / 1440;
+  return d % 1 === 0 ? `${d}D` : `${d.toFixed(1)}D`;
+}
+
 function categorize(inc: IncidentListResponse[0]): keyof Omit<typeof CALL_COLORS, "Major"> {
   if (inc.callTypeFamily === "Medical") return "Medical";
   if (inc.agency === "fire") {
@@ -44,12 +62,6 @@ function categorize(inc: IncidentListResponse[0]): keyof Omit<typeof CALL_COLORS
     return "Police";
   }
   return "Other";
-}
-
-function filterByRange(incidents: IncidentListResponse, range: TimeRange): IncidentListResponse {
-  const now = new Date();
-  const cutoffHours: Record<TimeRange, number> = { "1d": 24, "7d": 168, "30d": 720, "365d": 8760 };
-  return incidents.filter(i => differenceInHours(now, new Date(i.time)) <= cutoffHours[range]);
 }
 
 const TT: React.CSSProperties = {
@@ -80,43 +92,97 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 }
 
 export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
-  const [range, setRange] = useState<TimeRange>("7d");
-  const ranged = useMemo(() => filterByRange(incidents, range), [incidents, range]);
-  const rangeDays = range === "1d" ? 1 : range === "7d" ? 7 : range === "30d" ? 30 : 365;
+  const [rangeMinutes, setRangeMinutes] = useState(10080); // 7d default
+  const [customVal, setCustomVal] = useState("7");
+  const [customUnit, setCustomUnit] = useState<Unit>("day");
+  const [showCustom, setShowCustom] = useState(false);
+  const customInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Category totals ──────────────────────────────────────────
+  function applyCustom(val: string, unit: Unit) {
+    const n = parseFloat(val);
+    if (isNaN(n) || n <= 0) return;
+    const mult = unit === "min" ? 1 : unit === "hr" ? 60 : 1440;
+    const clamped = Math.max(1, Math.min(525600, Math.round(n * mult)));
+    setRangeMinutes(clamped);
+  }
+
+  function selectPreset(minutes: number) {
+    setRangeMinutes(minutes);
+    setShowCustom(false);
+    // sync custom display
+    if (minutes < 60) { setCustomVal(String(minutes)); setCustomUnit("min"); }
+    else if (minutes < 1440) { setCustomVal(String(minutes / 60)); setCustomUnit("hr"); }
+    else { setCustomVal(String(minutes / 1440)); setCustomUnit("day"); }
+  }
+
+  // ── Derived data ─────────────────────────────────────────────
+  const now = useMemo(() => new Date(), []);
+
+  const ranged = useMemo(() =>
+    incidents.filter(i => differenceInMinutes(now, new Date(i.time)) <= rangeMinutes),
+    [incidents, rangeMinutes, now]
+  );
+
+  const total = ranged.length;
+  const rangeDays = rangeMinutes / 1440;
+  const majorInRange = useMemo(() => ranged.filter(i => i.isMajor), [ranged]);
+
   const catCounts = useMemo(() => {
     const c = { Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0 };
     for (const inc of ranged) c[categorize(inc)]++;
     return c;
   }, [ranged]);
 
-  const total = ranged.length;
-  const majorInRange = useMemo(() => ranged.filter(i => i.isMajor), [ranged]);
-
-  // ── Daily trend per category ──────────────────────────────────
-  const dailyData = useMemo(() => {
-    const days = Math.min(rangeDays, 90);
-    const buckets = Array.from({ length: days }, (_, i) => {
-      const d = subDays(startOfDay(new Date()), days - 1 - i);
-      return {
-        date: format(d, days <= 7 ? "EEE" : days <= 31 ? "M/d" : "M/d"),
-        ts: d.getTime(),
-        Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
-      };
-    });
-    for (const inc of incidents) {
-      const ts = startOfDay(new Date(inc.time)).getTime();
-      const idx = buckets.findIndex(b => b.ts === ts);
-      if (idx < 0) continue;
-      buckets[idx][categorize(inc)]++;
-      if (inc.isMajor) buckets[idx].Major++;
-      buckets[idx].total++;
+  // ── Trend chart — hourly if < 3 days, daily otherwise ────────
+  const useHourlyTrend = rangeMinutes <= 4320; // ≤3 days
+  const trendData = useMemo(() => {
+    if (useHourlyTrend) {
+      const bucketCount = Math.max(1, Math.ceil(rangeMinutes / 60));
+      const capped = Math.min(bucketCount, 120);
+      return Array.from({ length: capped }, (_, i) => {
+        const h = subHours(startOfHour(now), capped - 1 - i);
+        return {
+          date: format(h, capped <= 24 ? "ha" : "M/d ha"),
+          ts: h.getTime(),
+          Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
+        };
+      }).map(bucket => {
+        for (const inc of ranged) {
+          const t = startOfHour(new Date(inc.time)).getTime();
+          if (t === bucket.ts) {
+            bucket[categorize(inc)]++;
+            if (inc.isMajor) bucket.Major++;
+            bucket.total++;
+          }
+        }
+        return bucket;
+      });
+    } else {
+      const days = Math.min(Math.ceil(rangeDays), 90);
+      return Array.from({ length: days }, (_, i) => {
+        const d = subDays(startOfDay(now), days - 1 - i);
+        return {
+          date: format(d, days <= 7 ? "EEE" : "M/d"),
+          ts: d.getTime(),
+          Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
+        };
+      }).map(bucket => {
+        for (const inc of incidents) {
+          const t = startOfDay(new Date(inc.time)).getTime();
+          if (t === bucket.ts) {
+            bucket[categorize(inc)]++;
+            if (inc.isMajor) bucket.Major++;
+            bucket.total++;
+          }
+        }
+        return bucket;
+      });
     }
-    return buckets;
-  }, [incidents, rangeDays]);
+  }, [incidents, ranged, rangeMinutes, useHourlyTrend, now, rangeDays]);
 
-  // ── Hour-of-day pattern ───────────────────────────────────────
+  const trendInterval = trendData.length <= 12 ? 0 : trendData.length <= 30 ? 2 : trendData.length <= 60 ? 5 : 8;
+
+  // ── Hour of day ───────────────────────────────────────────────
   const hourlyData = useMemo(() => {
     const h = Array.from({ length: 24 }, (_, i) => ({
       label: i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`,
@@ -131,8 +197,6 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
     return h;
   }, [ranged]);
 
-  const maxHourTotal = Math.max(...hourlyData.map(h => h.total), 1);
-
   // ── Major incident analytics ──────────────────────────────────
   const majorHours = useMemo(() => {
     const h = Array(24).fill(0);
@@ -142,10 +206,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
 
   const majorByType = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const inc of majorInRange) {
-      const ct = inc.callType;
-      m[ct] = (m[ct] ?? 0) + 1;
-    }
+    for (const inc of majorInRange) m[inc.callType] = (m[inc.callType] ?? 0) + 1;
     return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [majorInRange]);
 
@@ -169,7 +230,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
       .slice(0, 10);
   }, [ranged]);
 
-  // ── Day-of-week ───────────────────────────────────────────────
+  // ── Day of week ───────────────────────────────────────────────
   const dowData = useMemo(() => {
     const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     const c = Array(7).fill(0);
@@ -177,48 +238,104 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
     return names.map((d, i) => ({ day: d, count: c[i] }));
   }, [ranged]);
 
-  const prevRanged = useMemo(() => {
-    const now = new Date();
-    const cutoffHours: Record<TimeRange, number> = { "1d": 24, "7d": 168, "30d": 720, "365d": 8760 };
-    const hours = cutoffHours[range];
-    return incidents.filter(i => {
-      const h = differenceInHours(now, new Date(i.time));
-      return h > hours && h <= hours * 2;
-    });
-  }, [incidents, range]);
+  // ── Period comparison ─────────────────────────────────────────
+  const prevTotal = useMemo(() =>
+    incidents.filter(i => {
+      const m = differenceInMinutes(now, new Date(i.time));
+      return m > rangeMinutes && m <= rangeMinutes * 2;
+    }).length,
+    [incidents, rangeMinutes, now]
+  );
 
-  const trend = total > 0 && prevRanged.length > 0
-    ? ((total - prevRanged.length) / prevRanged.length) * 100
+  const trend = total > 0 && prevTotal > 0
+    ? ((total - prevTotal) / prevTotal) * 100
     : null;
 
-  const axisInterval = rangeDays <= 7 ? 0 : rangeDays <= 30 ? 3 : 7;
+  const activePreset = PRESETS.find(p => p.minutes === rangeMinutes);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* ── Header ── */}
-      <div className="px-4 pt-3 pb-2.5 border-b border-white/5 shrink-0">
-        <div className="flex items-center justify-between">
+      <div className="px-4 pt-3 pb-0 border-b border-white/5 shrink-0">
+        <div className="flex items-center justify-between mb-2.5">
           <div>
             <span className="text-xs font-semibold text-foreground">Analytics</span>
             <span className="ml-2 text-[10px] text-muted-foreground/60 font-mono">{total} calls</span>
           </div>
-          <div className="flex gap-1 bg-white/5 rounded-lg p-0.5">
-            {(["1d","7d","30d","365d"] as TimeRange[]).map(r => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={cn(
-                  "text-[10px] font-bold px-2.5 py-1 rounded-md transition-all",
-                  range === r
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+          <span className="text-[10px] font-mono text-primary/80 bg-primary/10 px-2 py-0.5 rounded-md">
+            {minutesToLabel(rangeMinutes)}
+          </span>
+        </div>
+
+        {/* Preset buttons */}
+        <div className="flex gap-1 mb-2">
+          {PRESETS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => selectPreset(p.minutes)}
+              className={cn(
+                "flex-1 text-[9px] font-bold py-1.5 rounded-md transition-all",
+                rangeMinutes === p.minutes
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground/60 bg-white/5 hover:text-foreground hover:bg-white/10"
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom range row */}
+        <div className="flex items-center gap-1.5 pb-2.5">
+          <button
+            onClick={() => { setShowCustom(s => !s); setTimeout(() => customInputRef.current?.focus(), 50); }}
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border transition-all",
+              showCustom
+                ? "bg-primary/15 text-primary border-primary/30"
+                : "text-muted-foreground/60 border-white/8 hover:text-foreground hover:bg-white/5"
+            )}
+          >
+            Custom
+            <ChevronDown className={cn("w-3 h-3 transition-transform", showCustom && "rotate-180")} />
+          </button>
+
+          {showCustom && (
+            <div className="flex items-center gap-1 flex-1">
+              <input
+                ref={customInputRef}
+                type="number"
+                min="1"
+                max={customUnit === "min" ? 525600 : customUnit === "hr" ? 8760 : 365}
+                value={customVal}
+                onChange={e => {
+                  setCustomVal(e.target.value);
+                  applyCustom(e.target.value, customUnit);
+                }}
+                className="w-16 bg-white/8 border border-white/10 rounded-md px-2 py-1 text-[11px] text-foreground font-mono text-center focus:outline-none focus:border-primary/40"
+              />
+              <select
+                value={customUnit}
+                onChange={e => {
+                  const u = e.target.value as Unit;
+                  setCustomUnit(u);
+                  applyCustom(customVal, u);
+                }}
+                className="flex-1 bg-[#1a1f35] border border-white/10 rounded-md px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:border-primary/40 appearance-none"
               >
-                {r === "1d" ? "24H" : r === "365d" ? "1Y" : r.toUpperCase()}
-              </button>
-            ))}
-          </div>
+                <option value="min">Minutes</option>
+                <option value="hr">Hours</option>
+                <option value="day">Days</option>
+              </select>
+            </div>
+          )}
+
+          {!showCustom && !activePreset && (
+            <span className="text-[10px] text-muted-foreground/50 font-mono">
+              Custom: {minutesToLabel(rangeMinutes)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -230,15 +347,34 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
           <section>
             <SectionTitle>Overview</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
-              <KpiCard label="Total Calls" value={total} sub={`past ${range === "1d" ? "24 hours" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : "year"}`} />
-              <KpiCard label="Avg / Day" value={(total / rangeDays).toFixed(1)} sub="calls per day" />
-              <KpiCard label="Major Incidents" value={majorInRange.length} sub={`${total > 0 ? ((majorInRange.length / total) * 100).toFixed(1) : 0}% of calls`} color={CALL_COLORS.Major} />
+              <KpiCard
+                label="Total Calls"
+                value={total}
+                sub={`past ${minutesToLabel(rangeMinutes)}`}
+              />
+              <KpiCard
+                label="Avg / Day"
+                value={rangeDays >= 1 ? (total / rangeDays).toFixed(1) : `${total}`}
+                sub={rangeDays >= 1 ? "calls per day" : "in window"}
+              />
+              <KpiCard
+                label="Major Incidents"
+                value={majorInRange.length}
+                sub={`${total > 0 ? ((majorInRange.length / total) * 100).toFixed(1) : 0}% of calls`}
+                color={CALL_COLORS.Major}
+              />
               <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
                 <p className="text-[10px] text-muted-foreground/60 font-medium">vs. Prior Period</p>
                 {trend !== null ? (
                   <div className="flex items-center gap-1.5">
-                    {trend > 5 ? <TrendingUp className="w-4 h-4 text-red-400" /> : trend < -5 ? <TrendingDown className="w-4 h-4 text-emerald-400" /> : <Minus className="w-4 h-4 text-muted-foreground" />}
-                    <span className={cn("text-xl font-bold leading-none", trend > 5 ? "text-red-400" : trend < -5 ? "text-emerald-400" : "text-foreground")}>
+                    {trend > 5
+                      ? <TrendingUp className="w-4 h-4 text-red-400" />
+                      : trend < -5
+                      ? <TrendingDown className="w-4 h-4 text-emerald-400" />
+                      : <Minus className="w-4 h-4 text-muted-foreground" />}
+                    <span className={cn("text-xl font-bold leading-none",
+                      trend > 5 ? "text-red-400" : trend < -5 ? "text-emerald-400" : "text-foreground"
+                    )}>
                       {trend > 0 ? "+" : ""}{trend.toFixed(0)}%
                     </span>
                   </div>
@@ -281,12 +417,12 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
 
           {/* ── Comparative trend lines ── */}
           <section>
-            <SectionTitle>Trends by Type</SectionTitle>
+            <SectionTitle>Trends by Type {useHourlyTrend ? "(hourly)" : "(daily)"}</SectionTitle>
             <div className="h-48 -mx-1">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={axisInterval} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={trendInterval} />
                   <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={TT} itemStyle={{ color: "#cbd5e1" }} />
                   {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => (
@@ -310,7 +446,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
             <SectionTitle>Total Call Volume</SectionTitle>
             <div className="h-36 -mx-1">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dailyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                <AreaChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
                   <defs>
                     <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -318,7 +454,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={axisInterval} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={trendInterval} />
                   <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={TT} />
                   <Area type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={1.5} fill="url(#totalGrad)" dot={false} name="Total" />
@@ -327,39 +463,41 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
             </div>
           </section>
 
-          {/* ── Hour-of-day pattern ── */}
-          <section>
-            <SectionTitle>Hour of Day Pattern</SectionTitle>
-            <div className="h-40 -mx-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }} barSize={5} barGap={0}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
-                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} />
-                  <Bar dataKey="Medical" stackId="s" fill={CALL_COLORS.Medical} />
-                  <Bar dataKey="Fire"    stackId="s" fill={CALL_COLORS.Fire} />
-                  <Bar dataKey="Police"  stackId="s" fill={CALL_COLORS.Police} />
-                  <Bar dataKey="Traffic" stackId="s" fill={CALL_COLORS.Traffic} />
-                  <Bar dataKey="Other"   stackId="s" fill={CALL_COLORS.Other} radius={[2,2,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {PERIODS.map(p => {
-                const cnt = p.hours.reduce((s, h) => s + hourlyData[h].total, 0);
-                return (
-                  <div key={p.label} className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.05] rounded-lg px-2.5 py-2">
-                    <span className="text-base">{p.icon}</span>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground/60">{p.label}</p>
-                      <p className="text-sm font-bold">{cnt} <span className="text-[9px] text-muted-foreground/50 font-normal">calls</span></p>
+          {/* ── Hour-of-day pattern (skip for very short ranges) ── */}
+          {rangeMinutes >= 60 && (
+            <section>
+              <SectionTitle>Hour of Day Pattern</SectionTitle>
+              <div className="h-40 -mx-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }} barSize={5} barGap={0}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
+                    <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={TT} />
+                    <Bar dataKey="Medical" stackId="s" fill={CALL_COLORS.Medical} />
+                    <Bar dataKey="Fire"    stackId="s" fill={CALL_COLORS.Fire} />
+                    <Bar dataKey="Police"  stackId="s" fill={CALL_COLORS.Police} />
+                    <Bar dataKey="Traffic" stackId="s" fill={CALL_COLORS.Traffic} />
+                    <Bar dataKey="Other"   stackId="s" fill={CALL_COLORS.Other} radius={[2,2,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {PERIODS.map(p => {
+                  const cnt = p.hours.reduce((s, h) => s + hourlyData[h].total, 0);
+                  return (
+                    <div key={p.label} className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.05] rounded-lg px-2.5 py-2">
+                      <span className="text-base">{p.icon}</span>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground/60">{p.label}</p>
+                        <p className="text-sm font-bold">{cnt} <span className="text-[9px] text-muted-foreground/50 font-normal">calls</span></p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ── Major Incident Analytics ── */}
           <section>
@@ -378,9 +516,8 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   />
                 </div>
 
-                {/* Major calls by hour */}
                 <div>
-                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">Major calls by hour</p>
+                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">Major calls by hour of day</p>
                   <div className="h-28 -mx-1">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={hourlyData.map((h, i) => ({ ...h, Major: majorHours[i] }))} margin={{ top: 2, right: 8, bottom: 0, left: -24 }} barSize={5}>
@@ -394,29 +531,24 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   </div>
                 </div>
 
-                {/* Major calls by day of week */}
                 <div>
-                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">Major calls by day of week</p>
+                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">By day of week</p>
                   <div className="space-y-1">
-                    {majorByDay.map(d => (
-                      <div key={d.day} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-muted-foreground/60 w-7">{d.day}</span>
-                        <div className="flex-1 bg-white/5 rounded-full h-1.5">
-                          <div
-                            className="h-1.5 rounded-full"
-                            style={{
-                              width: `${Math.max(...majorByDay.map(x => x.count)) > 0 ? (d.count / Math.max(...majorByDay.map(x => x.count))) * 100 : 0}%`,
-                              backgroundColor: CALL_COLORS.Major + "bb",
-                            }}
-                          />
+                    {majorByDay.map(d => {
+                      const maxVal = Math.max(...majorByDay.map(x => x.count), 1);
+                      return (
+                        <div key={d.day} className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-muted-foreground/60 w-7">{d.day}</span>
+                          <div className="flex-1 bg-white/5 rounded-full h-1.5">
+                            <div className="h-1.5 rounded-full" style={{ width: `${(d.count / maxVal) * 100}%`, backgroundColor: CALL_COLORS.Major + "bb" }} />
+                          </div>
+                          <span className="text-xs font-bold text-amber-400 w-4 text-right">{d.count}</span>
                         </div>
-                        <span className="text-xs font-bold text-amber-400 w-4 text-right">{d.count}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Top major call types */}
                 {majorByType.length > 0 && (
                   <div>
                     <p className="text-[10px] text-muted-foreground/50 mb-1.5">Most common major calls</p>
@@ -438,44 +570,47 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
           {/* ── Top Call Types ── */}
           <section>
             <SectionTitle>Most Common Calls</SectionTitle>
-            <div className="space-y-2">
-              {topTypes.map((ct, i) => (
-                <div key={ct.name} className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-muted-foreground/30 w-4 text-right">{i+1}</span>
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }} />
-                  <span className="flex-1 text-[11px] text-foreground/75 truncate">{ct.name}</span>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-12 bg-white/5 rounded-full h-1">
-                      <div
-                        className="h-1 rounded-full"
-                        style={{
+            {topTypes.length === 0 ? (
+              <p className="text-xs text-muted-foreground/40 py-2 text-center">No calls in this period.</p>
+            ) : (
+              <div className="space-y-2">
+                {topTypes.map((ct, i) => (
+                  <div key={ct.name} className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-muted-foreground/30 w-4 text-right">{i+1}</span>
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }} />
+                    <span className="flex-1 text-[11px] text-foreground/75 truncate">{ct.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-12 bg-white/5 rounded-full h-1">
+                        <div className="h-1 rounded-full" style={{
                           width: `${topTypes[0]?.count > 0 ? (ct.count / topTypes[0].count) * 100 : 0}%`,
                           backgroundColor: (CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff") + "99",
-                        }}
-                      />
+                        }} />
+                      </div>
+                      <span className="text-xs font-bold" style={{ color: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }}>{ct.count}</span>
                     </div>
-                    <span className="text-xs font-bold" style={{ color: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }}>{ct.count}</span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* ── Day of Week ── */}
-          <section>
-            <SectionTitle>Day of Week</SectionTitle>
-            <div className="h-32 -mx-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} />
-                  <Bar dataKey="count" fill="#6366f1" fillOpacity={0.7} radius={[3,3,0,0]} name="Calls" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+          {/* ── Day of Week (only meaningful for ranges ≥ 1 day) ── */}
+          {rangeDays >= 1 && (
+            <section>
+              <SectionTitle>Day of Week</SectionTitle>
+              <div className="h-32 -mx-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={TT} />
+                    <Bar dataKey="count" fill="#6366f1" fillOpacity={0.7} radius={[3,3,0,0]} name="Calls" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
 
           {/* ── Pie breakdown ── */}
           <section>
@@ -484,8 +619,13 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
               <div className="h-32 w-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={Object.entries(catCounts).map(([name, value]) => ({ name, value }))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={55} paddingAngle={2}>
-                      {Object.keys(catCounts).map(cat => (
+                    <Pie
+                      data={Object.entries(catCounts).filter(([,v]) => v > 0).map(([name, value]) => ({ name, value }))}
+                      dataKey="value" nameKey="name"
+                      cx="50%" cy="50%"
+                      innerRadius={30} outerRadius={55} paddingAngle={2}
+                    >
+                      {Object.entries(catCounts).filter(([,v]) => v > 0).map(([cat]) => (
                         <Cell key={cat} fill={CALL_COLORS[cat as keyof typeof CALL_COLORS] ?? "#94a3b8"} />
                       ))}
                     </Pie>
@@ -498,7 +638,9 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   <div key={cat} className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: CALL_COLORS[cat] }} />
                     <span className="text-[11px] text-foreground/70 flex-1">{cat}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground/50">{total > 0 ? ((catCounts[cat] / total) * 100).toFixed(0) : 0}%</span>
+                    <span className="text-[10px] font-mono text-muted-foreground/50">
+                      {total > 0 ? ((catCounts[cat] / total) * 100).toFixed(0) : 0}%
+                    </span>
                   </div>
                 ))}
               </div>
