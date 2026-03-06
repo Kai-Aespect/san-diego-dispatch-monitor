@@ -164,7 +164,7 @@ export class DatabaseStorage implements IStorage {
         lastUpdated: new Date(),
         notes: existing.notes,
         tags: existing.tags,
-        acknowledged: existing.acknowledged,
+        acknowledged: changes.length > 0 ? false : existing.acknowledged,
         lat: incident.lat ?? existing.lat,
         lng: incident.lng ?? existing.lng,
         active: true,

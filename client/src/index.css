@@ -110,13 +110,13 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-foreground;
     font-family: var(--font-sans);
-    background-color: var(--background);
+    background-color: #0a0c14;
     background-attachment: fixed;
     min-height: 100vh;
   }
 
   .light body, html.light body {
-    background-color: var(--background);
+    background-color: #f0f4f8;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -133,7 +133,7 @@
 @layer utilities {
   /* Glass panel core */
   .glass-panel {
-    @apply bg-background/80 backdrop-blur-md border-white/5;
+    @apply bg-[#141928]/80 backdrop-blur-md border-white/5;
   }
 
   /* Text shadow for readability */

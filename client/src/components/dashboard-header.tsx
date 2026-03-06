@@ -94,7 +94,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         preload="none"
       />
 
-      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-background/80 backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-[#0a0c14]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         {/* Inline audio player bar */}
         {playerOpen && (
           <div className="mt-3 max-w-screen-2xl mx-auto">
-            <div className="rounded-2xl overflow-hidden bg-background/60 backdrop-blur-xl border border-white/10 shadow-2xl">
+            <div className="rounded-2xl overflow-hidden bg-[#141928]/60 backdrop-blur-xl border border-white/10 shadow-2xl">
               <div className="flex items-center gap-4 px-4 py-3">
 
                 {/* Play/Pause button */}

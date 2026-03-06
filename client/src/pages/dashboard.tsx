@@ -239,7 +239,7 @@ export default function Dashboard() {
 
         {/* Left panel */}
         <div
-          className="flex flex-col h-full shrink-0 overflow-hidden border-r border-white/5 bg-background/40 backdrop-blur-xl"
+          className="flex flex-col h-full shrink-0 overflow-hidden border-r border-white/5 bg-[#141928]/40 backdrop-blur-xl"
           style={{ width: leftResize.width }}
         >
           <CallListContent {...callListProps} />
@@ -260,7 +260,7 @@ export default function Dashboard() {
 
         {/* Right side panel */}
         <div
-          className="flex flex-col h-full shrink-0 overflow-hidden border-l border-white/5 bg-background/40 backdrop-blur-xl"
+          className="flex flex-col h-full shrink-0 overflow-hidden border-l border-white/5 bg-[#141928]/40 backdrop-blur-xl"
           style={{ width: rightResize.width }}
         >
           <SidePanel
@@ -372,7 +372,7 @@ function CallListContent({
 }: CallListContentProps) {
   return (
     <>
-      <div className="p-3 space-y-2.5 z-10 shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-md">
+      <div className="p-3 space-y-2.5 z-10 shrink-0 border-b border-white/5 bg-[#141928]/40 backdrop-blur-md">
         <div className="flex items-center justify-between gap-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
             <TabsList className="grid w-full grid-cols-3 bg-white/5 border border-white/10">
@@ -414,7 +414,7 @@ function CallListContent({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 px-2 text-xs border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap shrink-0"
+              className="h-8 px-2 text-xs border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap shrink-0 ml-auto"
               onClick={handleAcknowledgeAll}
               disabled={isAckingAll}
               data-testid="button-acknowledge-all"
