@@ -180,16 +180,16 @@ export function UnitsPanel({ incidents, onSelectIncident }: UnitsPanelProps) {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-1 overflow-x-auto pb-0.5">
+        <div className="flex flex-wrap gap-1">
           {UNIT_TYPES.map(t => (
             <button
               key={t.key}
               onClick={() => setCategoryFilter(t.key)}
               className={cn(
-                "text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap transition-colors border",
+                "text-[10px] font-semibold px-2.5 py-1 rounded-md transition-all border shadow-sm",
                 categoryFilter === t.key
-                  ? "bg-primary/20 text-primary border-primary/30"
-                  : "text-muted-foreground border-white/8 hover:bg-white/5"
+                  ? "bg-primary/20 text-primary border-primary/40 ring-1 ring-primary/20"
+                  : "bg-white/5 text-muted-foreground border-white/10 hover:bg-white/10 hover:border-white/20"
               )}
             >
               {t.label}
