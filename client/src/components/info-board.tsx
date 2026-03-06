@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw } from "lucide-react";
+import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AdminCardListResponse } from "@shared/routes";
+import { useAuthKey } from "@/hooks/use-auth-key";
 
 const COLOR_MAP: Record<string, string> = {
   blue:   "bg-blue-500/15 border-blue-500/25 text-blue-400",
@@ -121,6 +122,7 @@ export function InfoBoard() {
     queryKey: ['/api/admin/cards'],
     refetchInterval: 15000,
   });
+  const { isAuthorized, AuthPrompt } = useAuthKey();
 
   if (isLoading) {
     return (
@@ -141,47 +143,73 @@ export function InfoBoard() {
     );
   }
 
+  const hasLockedCards = cards.some(c => c.isKeyLocked);
+
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
-      {cards.map(card => {
-        const colorClass = getColorClass(card.color);
-        const typeIcon =
-          card.type === "link" ? <Link className="w-3 h-3 shrink-0" /> :
-          card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
-          card.type === "poll" ? <BarChart2 className="w-3 h-3 shrink-0" /> :
-          <FileText className="w-3 h-3 shrink-0" />;
+    <div className="flex-1 flex flex-col min-h-0">
+      {hasLockedCards && !isAuthorized && (
+        <div className="px-4 py-3 border-b border-white/5 bg-amber-500/5">
+          <AuthPrompt 
+            title="Restricted Content" 
+            description="Some information on this board requires a security key to view."
+          />
+        </div>
+      )}
 
-        return (
-          <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5", colorClass)}>
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              {typeIcon}
-              <span>{card.title}</span>
-              {card.pinned && <span className="text-[9px] opacity-40 ml-auto">PINNED</span>}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
+        {cards.map(card => {
+          if (card.isKeyLocked && !isAuthorized) return null;
+
+          const colorClass = getColorClass(card.color);
+          const typeIcon =
+            card.type === "link" ? <Link className="w-3 h-3 shrink-0" /> :
+            card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
+            card.type === "poll" ? <BarChart2 className="w-3 h-3 shrink-0" /> :
+            <FileText className="w-3 h-3 shrink-0" />;
+
+          return (
+            <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5", colorClass)}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                {typeIcon}
+                <span>{card.title}</span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  {card.isKeyLocked && <Lock className="w-2.5 h-2.5 opacity-60" />}
+                  {card.pinned && <span className="text-[9px] opacity-40 uppercase">Pinned</span>}
+                </div>
+              </div>
+
+              {card.type === "poll" && card.pollId ? (
+                <PollCard pollId={card.pollId} cardColor={card.color} />
+              ) : (
+                <>
+                  {card.content && (
+                    <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{card.content}</p>
+                  )}
+                  {card.type === "link" && card.url && (
+                    <a
+                      href={card.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs font-mono hover:underline opacity-70 hover:opacity-100 transition-opacity"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      {card.url.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                </>
+              )}
             </div>
+          );
+        })}
 
-            {card.type === "poll" && card.pollId ? (
-              <PollCard pollId={card.pollId} cardColor={card.color} />
-            ) : (
-              <>
-                {card.content && (
-                  <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{card.content}</p>
-                )}
-                {card.type === "link" && card.url && (
-                  <a
-                    href={card.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs font-mono hover:underline opacity-70 hover:opacity-100 transition-opacity"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    {card.url.replace(/^https?:\/\//, "")}
-                  </a>
-                )}
-              </>
-            )}
+        {/* Placeholder if all cards are hidden */}
+        {cards.every(c => c.isKeyLocked) && !isAuthorized && (
+          <div className="flex flex-col items-center justify-center py-12 text-center opacity-30">
+            <Lock className="w-8 h-8 mb-2" />
+            <p className="text-xs">All current cards are key-locked.</p>
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
   );
 }

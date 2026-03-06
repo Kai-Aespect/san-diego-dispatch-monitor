@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthKey, AuthPrompt } from "@/hooks/use-auth-key";
 import { type IncidentListResponse } from "@shared/routes";
-import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock } from "lucide-react";
+import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
 
@@ -269,6 +270,7 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
 }
 
 export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPanelProps) {
+  const { isAuthorized } = useAuthKey();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -428,49 +430,59 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-        {filtered.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground/40 text-xs">No units found.</div>
-        )}
-        {filtered.map(unit => {
-          const activeInc = activeUnitMap.get(unit.id);
-          const colors = UNIT_CATEGORY_COLORS[unit.category];
-          const Icon = CATEGORY_ICONS[unit.category];
-          return (
-            <div
-              key={unit.id}
-              onClick={() => setSelectedUnitId(unit.id)}
-              className={cn(
-                "flex items-start gap-2.5 px-2.5 py-2 rounded-lg border text-xs transition-all cursor-pointer",
-                colors.bg, colors.border,
-                "hover:brightness-125"
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+          {!isAuthorized ? (
+            <AuthPrompt 
+              title="Units Protected" 
+              description="Detailed unit status and assignment data is restricted. Enter your authorization key to view."
+              className="my-8 mx-4"
+            />
+          ) : (
+            <>
+              {filtered.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground/40 text-xs">No units found.</div>
               )}
-            >
-              <div className={cn("mt-0.5 shrink-0", colors.text)}>
-                <Icon className="w-3.5 h-3.5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={cn("font-mono font-bold", colors.text)}>{unit.id}</span>
-                  <span className="text-muted-foreground/50 text-[10px]">{unit.type}</span>
-                  {activeInc && (
-                    <span className="ml-auto flex items-center gap-1 text-[9px] font-bold text-emerald-400 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      ACTIVE
-                    </span>
-                  )}
-                </div>
-                <p className="text-muted-foreground/60 text-[10px] leading-snug mt-0.5">{unit.description}</p>
-                {activeInc && (
-                  <p className="text-[10px] text-emerald-300/70 mt-0.5 truncate">
-                    → {activeInc.callType} · {activeInc.location}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              {filtered.map(unit => {
+                const activeInc = activeUnitMap.get(unit.id);
+                const colors = UNIT_CATEGORY_COLORS[unit.category];
+                const Icon = CATEGORY_ICONS[unit.category];
+                return (
+                  <div
+                    key={unit.id}
+                    onClick={() => setSelectedUnitId(unit.id)}
+                    className={cn(
+                      "flex items-start gap-2.5 px-2.5 py-2 rounded-lg border text-xs transition-all cursor-pointer",
+                      colors.bg, colors.border,
+                      "hover:brightness-125"
+                    )}
+                  >
+                    <div className={cn("mt-0.5 shrink-0", colors.text)}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-foreground">{unit.id}</span>
+                        <span className="text-[10px] text-muted-foreground/60">•</span>
+                        <span className="text-[10px] text-muted-foreground/80 truncate">{unit.type}</span>
+                        {activeInc && (
+                          <div className="ml-auto flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[9px] font-bold text-emerald-500 uppercase">Active</span>
+                          </div>
+                        )}
+                      </div>
+                      {activeInc && (
+                        <p className="text-[10px] text-emerald-400/80 font-medium truncate mt-0.5">
+                          {activeInc.callType} @ {activeInc.location}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 mt-1 text-muted-foreground/30" />
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>    </div>
   );
 }

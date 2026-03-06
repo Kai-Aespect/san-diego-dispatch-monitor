@@ -45,6 +45,7 @@ export const adminCards = pgTable("admin_cards", {
   pinned: boolean("pinned").default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   pollId: integer("poll_id"),
+  isKeyLocked: boolean("is_key_locked").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
