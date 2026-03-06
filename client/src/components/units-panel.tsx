@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type IncidentListResponse } from "@shared/routes";
 import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useKeyAuth } from "@/hooks/use-key-auth";
 
 interface UnitsPanelProps {
   incidents: IncidentListResponse;
@@ -140,7 +140,7 @@ const SD_UNITS: UnitDefinition[] = [
 ];
 
 function UnitPublicNotes({ unitId }: { unitId: string }) {
-  const { isAdmin: unlocked, checkPinAsync, getStoredPin } = useAdminAuth();
+  const { isKeyUnlocked: unlocked, keyCheckPinAsync: checkPinAsync, keyGetStoredPin: getStoredPin } = useKeyAuth();
   const { data: note, refetch } = useQuery<{ content: string }>({ queryKey: [`/api/units/${unitId}/note`] });
   const [isSaving, setIsSaving] = useState(false);
   const [content, setContent] = useState("");

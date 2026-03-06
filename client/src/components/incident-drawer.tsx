@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useBookmarks } from "@/hooks/use-bookmarks";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useKeyAuth } from "@/hooks/use-key-auth";
 
 interface IncidentDrawerProps {
   incident: IncidentListResponse[0] | null;
@@ -48,7 +48,7 @@ const SYSTEM_ONLY_FIELDS = new Set(["lat", "lng"]);
 
 export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawerProps) {
   const { toast } = useToast();
-  const { isAdmin: unlocked, checkPinAsync, getStoredPin } = useAdminAuth();
+  const { isKeyUnlocked: unlocked, keyCheckPinAsync: checkPinAsync, keyGetStoredPin: getStoredPin } = useKeyAuth();
   const [notes, setNotes] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);

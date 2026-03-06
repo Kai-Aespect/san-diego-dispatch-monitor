@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, LockKeyhole } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AdminCardListResponse } from "@shared/routes";
-import { useAdminAuth, checkPinAsync } from "@/hooks/use-admin-auth";
+import { useKeyAuth, keyCheckPinAsync } from "@/hooks/use-key-auth";
 
 const COLOR_MAP: Record<string, string> = {
   blue:   "bg-blue-500/15 border-blue-500/25 text-blue-400",
@@ -126,7 +126,7 @@ function KeyPrompt({ onUnlock }: { onUnlock: () => void }) {
     if (!pin.trim() || checking) return;
     setChecking(true);
     setError(false);
-    const ok = await checkPinAsync(pin.trim());
+    const ok = await keyCheckPinAsync(pin.trim());
     if (ok) {
       onUnlock();
     } else {
@@ -170,9 +170,13 @@ function KeyPrompt({ onUnlock }: { onUnlock: () => void }) {
 }
 
 export function InfoBoard() {
-  const { isAdmin } = useAdminAuth();
-  const [keyUnlocked, setKeyUnlocked] = useState(isAdmin);
+  const { isKeyUnlocked } = useKeyAuth();
+  const [keyUnlocked, setKeyUnlocked] = useState(isKeyUnlocked);
   const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    if (isKeyUnlocked) { setKeyUnlocked(true); setShowPrompt(false); }
+  }, [isKeyUnlocked]);
 
   const { data: cards = [], isLoading } = useQuery<AdminCardListResponse>({
     queryKey: ['/api/admin/cards'],
@@ -180,7 +184,7 @@ export function InfoBoard() {
   });
 
   const hasLockedCards = cards.some(c => c.keyLocked);
-  const visibleCards = (keyUnlocked || isAdmin)
+  const visibleCards = keyUnlocked
     ? cards
     : cards.filter(c => !c.keyLocked);
 
@@ -203,11 +207,9 @@ export function InfoBoard() {
     );
   }
 
-  const isUnlocked = keyUnlocked || isAdmin;
-
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
-      {hasLockedCards && !isUnlocked && (
+      {hasLockedCards && !keyUnlocked && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
           {showPrompt ? (
             <KeyPrompt onUnlock={() => { setKeyUnlocked(true); setShowPrompt(false); }} />
