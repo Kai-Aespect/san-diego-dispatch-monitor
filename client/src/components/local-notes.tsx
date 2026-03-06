@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useLocalNotes, type LocalNote } from "@/hooks/use-local-notes";
-import { useAuthKey, AuthPrompt } from "@/hooks/use-auth-key";
 import { type IncidentListResponse } from "@shared/routes";
-import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Radio, Search, GripVertical, Lock } from "lucide-react";
+import { Plus, Pin, PinOff, Trash2, Edit3, Save, X, Radio, Search, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +43,6 @@ const ALL_COLORS = Object.keys(COLOR_MAP);
 
 export function LocalNotes({ incidents }: LocalNotesProps) {
   const { notes, createNote, updateNote, deleteNote, togglePin, reorderNotes } = useLocalNotes();
-  const { isAuthorized } = useAuthKey();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showLinkPicker, setShowLinkPicker] = useState<string | null>(null);
@@ -108,13 +106,7 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
       </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-          {!isAuthorized ? (
-            <AuthPrompt 
-              title="Notes Locked" 
-              description="Personal notes and incident tags are protected. Enter your authorization key to view them."
-              className="my-4"
-            />
-          ) : filtered.length === 0 ? (
+          filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-accent/30 flex items-center justify-center">
                 <Edit3 className="w-7 h-7 opacity-40" />
@@ -149,7 +141,7 @@ export function LocalNotes({ incidents }: LocalNotesProps) {
                 ))}
               </SortableContext>
             </DndContext>
-          )}
+          
         </div>    </div>
   );
 }
