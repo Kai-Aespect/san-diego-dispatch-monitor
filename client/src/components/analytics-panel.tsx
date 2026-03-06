@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
 } from "recharts";
 import { type IncidentListResponse } from "@shared/routes";
-import { differenceInMinutes, format, startOfHour, subHours, startOfDay, subDays, getHours } from "date-fns";
+import { differenceInMinutes, format, startOfDay, subDays, getHours } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown } from "lucide-react";
 
@@ -133,54 +133,71 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
     return c;
   }, [ranged]);
 
-  // ── Trend chart — hourly if < 3 days, daily otherwise ────────
-  const useHourlyTrend = rangeMinutes <= 4320; // ≤3 days
+  // ── Trend chart — bucket size scales with range ───────────────
+  // ≤2H → 5-min buckets | ≤12H → 15-min | ≤72H → hourly | else daily
+  const bucketSizeMin =
+    rangeMinutes <= 120  ? 5  :
+    rangeMinutes <= 720  ? 15 :
+    rangeMinutes <= 4320 ? 60 : 0; // 0 = daily
+
+  const trendLabel =
+    bucketSizeMin === 5  ? "5-min" :
+    bucketSizeMin === 15 ? "15-min" :
+    bucketSizeMin === 60 ? "hourly" : "daily";
+
   const trendData = useMemo(() => {
-    if (useHourlyTrend) {
-      const bucketCount = Math.max(1, Math.ceil(rangeMinutes / 60));
-      const capped = Math.min(bucketCount, 120);
-      return Array.from({ length: capped }, (_, i) => {
-        const h = subHours(startOfHour(now), capped - 1 - i);
-        return {
-          date: format(h, capped <= 24 ? "ha" : "M/d ha"),
-          ts: h.getTime(),
-          Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
-        };
-      }).map(bucket => {
-        for (const inc of ranged) {
-          const t = startOfHour(new Date(inc.time)).getTime();
-          if (t === bucket.ts) {
-            bucket[categorize(inc)]++;
-            if (inc.isMajor) bucket.Major++;
-            bucket.total++;
-          }
+    if (bucketSizeMin > 0) {
+      // Sub-daily: build N buckets going back rangeMinutes
+      const bucketMs = bucketSizeMin * 60000;
+      const nowSnap = Math.floor(now.getTime() / bucketMs) * bucketMs;
+      const totalBuckets = Math.max(2, Math.ceil(rangeMinutes / bucketSizeMin));
+      const capped = Math.min(totalBuckets, 120);
+
+      const dateFormat =
+        bucketSizeMin <= 15 ? "h:mm a" :
+        capped <= 24 ? "ha" : "M/d ha";
+
+      const buckets = Array.from({ length: capped }, (_, i) => ({
+        date: format(new Date(nowSnap - (capped - 1 - i) * bucketMs), dateFormat),
+        ts: nowSnap - (capped - 1 - i) * bucketMs,
+        Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
+      }));
+
+      for (const inc of ranged) {
+        const t = Math.floor(new Date(inc.time).getTime() / bucketMs) * bucketMs;
+        const idx = buckets.findIndex(b => b.ts === t);
+        if (idx >= 0) {
+          buckets[idx][categorize(inc)]++;
+          if (inc.isMajor) buckets[idx].Major++;
+          buckets[idx].total++;
         }
-        return bucket;
-      });
+      }
+      return buckets;
     } else {
+      // Daily buckets
       const days = Math.min(Math.ceil(rangeDays), 90);
-      return Array.from({ length: days }, (_, i) => {
+      const buckets = Array.from({ length: days }, (_, i) => {
         const d = subDays(startOfDay(now), days - 1 - i);
         return {
           date: format(d, days <= 7 ? "EEE" : "M/d"),
           ts: d.getTime(),
           Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
         };
-      }).map(bucket => {
-        for (const inc of incidents) {
-          const t = startOfDay(new Date(inc.time)).getTime();
-          if (t === bucket.ts) {
-            bucket[categorize(inc)]++;
-            if (inc.isMajor) bucket.Major++;
-            bucket.total++;
-          }
-        }
-        return bucket;
       });
+      for (const inc of incidents) {
+        const t = startOfDay(new Date(inc.time)).getTime();
+        const idx = buckets.findIndex(b => b.ts === t);
+        if (idx >= 0) {
+          buckets[idx][categorize(inc)]++;
+          if (inc.isMajor) buckets[idx].Major++;
+          buckets[idx].total++;
+        }
+      }
+      return buckets;
     }
-  }, [incidents, ranged, rangeMinutes, useHourlyTrend, now, rangeDays]);
+  }, [incidents, ranged, rangeMinutes, bucketSizeMin, now, rangeDays]);
 
-  const trendInterval = trendData.length <= 12 ? 0 : trendData.length <= 30 ? 2 : trendData.length <= 60 ? 5 : 8;
+  const trendInterval = trendData.length <= 8 ? 0 : trendData.length <= 24 ? 1 : trendData.length <= 48 ? 3 : trendData.length <= 90 ? 5 : 8;
 
   // ── Hour of day ───────────────────────────────────────────────
   const hourlyData = useMemo(() => {
@@ -294,7 +311,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
               "flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border transition-all",
               showCustom
                 ? "bg-primary/15 text-primary border-primary/30"
-                : "text-muted-foreground/60 border-white/8 hover:text-foreground hover:bg-white/5"
+                : "text-muted-foreground/60 border-white/[0.08] hover:text-foreground hover:bg-white/5"
             )}
           >
             Custom
@@ -313,7 +330,8 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   setCustomVal(e.target.value);
                   applyCustom(e.target.value, customUnit);
                 }}
-                className="w-16 bg-white/8 border border-white/10 rounded-md px-2 py-1 text-[11px] text-foreground font-mono text-center focus:outline-none focus:border-primary/40"
+                style={{ color: "#f1f5f9", backgroundColor: "#1e2340" }}
+                className="w-16 border border-white/[0.12] rounded-md px-2 py-1 text-[11px] font-mono text-center focus:outline-none focus:border-primary/50"
               />
               <select
                 value={customUnit}
@@ -322,7 +340,8 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
                   setCustomUnit(u);
                   applyCustom(customVal, u);
                 }}
-                className="flex-1 bg-[#1a1f35] border border-white/10 rounded-md px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:border-primary/40 appearance-none"
+                style={{ color: "#f1f5f9", backgroundColor: "#1e2340" }}
+                className="flex-1 border border-white/[0.12] rounded-md px-1.5 py-1 text-[11px] focus:outline-none focus:border-primary/50 appearance-none cursor-pointer"
               >
                 <option value="min">Minutes</option>
                 <option value="hr">Hours</option>
@@ -417,7 +436,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
 
           {/* ── Comparative trend lines ── */}
           <section>
-            <SectionTitle>Trends by Type {useHourlyTrend ? "(hourly)" : "(daily)"}</SectionTitle>
+            <SectionTitle>Trends by Type ({trendLabel})</SectionTitle>
             <div className="h-48 -mx-1">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
