@@ -177,6 +177,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       if (changes.length > 0) {
+        await db.update(incidents).set({ hasHistory: true }).where(eq(incidents.id, existing.id));
         const unitChange = changes.find(c => c.field === 'units');
         let summary = `Sync: ${changes.map(c => c.field).join(', ')} changed`;
         if (unitChange) {

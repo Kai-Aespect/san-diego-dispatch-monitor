@@ -44,8 +44,8 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
   const isMedical = incident.callTypeFamily === 'Medical';
   const isTraffic = incident.callTypeFamily === 'Traffic';
 
-  const isNew = !incident.acknowledged && differenceInMinutes(new Date(), new Date(incident.time)) < 30;
-  const isUpdated = !incident.acknowledged && !isNew;
+  const isNew = !incident.acknowledged && !incident.hasHistory && differenceInMinutes(new Date(), new Date(incident.time)) < 30;
+  const isUpdated = !incident.acknowledged && incident.hasHistory;
   const bookmarked = isBookmarked(incident.id);
   const responseLevel = extractResponseLevel(incident.callType);
   const description = getCallDescription(incident.callType, incident.callTypeFamily);
