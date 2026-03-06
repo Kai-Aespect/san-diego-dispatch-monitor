@@ -1,23 +1,18 @@
 import { useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
 } from "recharts";
 import { type IncidentListResponse } from "@shared/routes";
-import { differenceInHours, differenceInDays, format, startOfDay, subDays } from "date-fns";
+import { differenceInHours, differenceInDays, format, startOfDay, subDays, getHours } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TrendingUp, Clock, Flame, Shield, Ambulance, Car, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Clock } from "lucide-react";
 
 interface AnalyticsPanelProps {
   incidents: IncidentListResponse;
 }
 
 type TimeRange = "1d" | "7d" | "30d" | "365d";
-type ChartView = "volume" | "types" | "trend" | "summary";
-
-const RANGE_LABELS: Record<TimeRange, string> = {
-  "1d": "24H", "7d": "7D", "30d": "30D", "365d": "365D",
-};
 
 const CALL_COLORS = {
   Medical:  "#34d399",
@@ -25,12 +20,19 @@ const CALL_COLORS = {
   Police:   "#60a5fa",
   Traffic:  "#fb923c",
   Other:    "#a78bfa",
-};
+  Major:    "#fbbf24",
+} as const;
 
-function categorize(inc: IncidentListResponse[0]): string {
+const PERIODS = [
+  { label: "Overnight", hours: [0,1,2,3,4,5], icon: "🌙" },
+  { label: "Morning",   hours: [6,7,8,9,10,11], icon: "🌅" },
+  { label: "Afternoon", hours: [12,13,14,15,16,17], icon: "☀️" },
+  { label: "Evening",   hours: [18,19,20,21,22,23], icon: "🌆" },
+];
+
+function categorize(inc: IncidentListResponse[0]): keyof Omit<typeof CALL_COLORS, "Major"> {
   if (inc.callTypeFamily === "Medical") return "Medical";
-  if (inc.agency === "fire" &&
-     !inc.callTypeFamily?.toLowerCase().includes("medical")) {
+  if (inc.agency === "fire") {
     const f = (inc.callTypeFamily ?? "").toLowerCase();
     const t = inc.callType.toLowerCase();
     if (f.includes("traffic") || t.includes("traffic") || t.includes("accident")) return "Traffic";
@@ -46,482 +48,465 @@ function categorize(inc: IncidentListResponse[0]): string {
 
 function filterByRange(incidents: IncidentListResponse, range: TimeRange): IncidentListResponse {
   const now = new Date();
-  const cutoffs: Record<TimeRange, number> = { "1d": 24, "7d": 168, "30d": 720, "365d": 8760 };
-  const hours = cutoffs[range];
-  return incidents.filter(i => differenceInHours(now, new Date(i.time)) <= hours);
+  const cutoffHours: Record<TimeRange, number> = { "1d": 24, "7d": 168, "30d": 720, "365d": 8760 };
+  return incidents.filter(i => differenceInHours(now, new Date(i.time)) <= cutoffHours[range]);
 }
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "#1a1f35",
-  border: "1px solid rgba(255,255,255,0.08)",
+const TT: React.CSSProperties = {
+  backgroundColor: "#161929",
+  border: "1px solid rgba(255,255,255,0.07)",
   borderRadius: "8px",
   fontSize: "11px",
-  color: "#e2e8f0",
+  color: "#cbd5e1",
+  padding: "6px 10px",
 };
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60 mb-2">
+      {children}
+    </h3>
+  );
+}
+
+function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+      <p className="text-[10px] text-muted-foreground/60 font-medium">{label}</p>
+      <p className="text-xl font-bold leading-none" style={color ? { color } : {}}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground/50">{sub}</p>}
+    </div>
+  );
+}
 
 export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   const [range, setRange] = useState<TimeRange>("7d");
-  const [view, setView] = useState<ChartView>("summary");
-
   const ranged = useMemo(() => filterByRange(incidents, range), [incidents, range]);
+  const rangeDays = range === "1d" ? 1 : range === "7d" ? 7 : range === "30d" ? 30 : 365;
 
-  // ── Time-of-day histogram ─────────────────────────────────────
-  const hourlyData = useMemo(() => {
-    const buckets = Array.from({ length: 24 }, (_, h) => ({
-      hour: h,
-      label: h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`,
-      Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, total: 0,
-    }));
-    for (const inc of ranged) {
-      const h = new Date(inc.time).getHours();
-      const cat = categorize(inc) as keyof typeof CALL_COLORS;
-      buckets[h][cat]++;
-      buckets[h].total++;
-    }
-    return buckets;
+  // ── Category totals ──────────────────────────────────────────
+  const catCounts = useMemo(() => {
+    const c = { Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0 };
+    for (const inc of ranged) c[categorize(inc)]++;
+    return c;
   }, [ranged]);
 
-  // ── Category breakdown ────────────────────────────────────────
-  const pieData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const inc of ranged) {
-      const cat = categorize(inc);
-      counts[cat] = (counts[cat] ?? 0) + 1;
-    }
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [ranged]);
+  const total = ranged.length;
+  const majorInRange = useMemo(() => ranged.filter(i => i.isMajor), [ranged]);
 
-  // ── Daily trend ───────────────────────────────────────────────
+  // ── Daily trend per category ──────────────────────────────────
   const dailyData = useMemo(() => {
-    const days = range === "1d" ? 1 : range === "7d" ? 7 : range === "30d" ? 30 : 90;
+    const days = Math.min(rangeDays, 90);
     const buckets = Array.from({ length: days }, (_, i) => {
       const d = subDays(startOfDay(new Date()), days - 1 - i);
       return {
-        date: format(d, days <= 7 ? "EEE" : days <= 30 ? "M/d" : "M/d"),
-        fullDate: d,
-        Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, total: 0,
+        date: format(d, days <= 7 ? "EEE" : days <= 31 ? "M/d" : "M/d"),
+        ts: d.getTime(),
+        Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
       };
     });
     for (const inc of incidents) {
-      const d = startOfDay(new Date(inc.time));
-      const idx = buckets.findIndex(b => Math.abs(differenceInDays(b.fullDate, d)) === 0);
-      if (idx >= 0) {
-        const cat = categorize(inc) as keyof typeof CALL_COLORS;
-        buckets[idx][cat]++;
-        buckets[idx].total++;
-      }
+      const ts = startOfDay(new Date(inc.time)).getTime();
+      const idx = buckets.findIndex(b => b.ts === ts);
+      if (idx < 0) continue;
+      buckets[idx][categorize(inc)]++;
+      if (inc.isMajor) buckets[idx].Major++;
+      buckets[idx].total++;
     }
     return buckets;
-  }, [incidents, range]);
+  }, [incidents, rangeDays]);
 
-  // ── Most common call types ────────────────────────────────────
-  const topCallTypes = useMemo(() => {
-    const counts: Record<string, { count: number; cat: string }> = {};
+  // ── Hour-of-day pattern ───────────────────────────────────────
+  const hourlyData = useMemo(() => {
+    const h = Array.from({ length: 24 }, (_, i) => ({
+      label: i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`,
+      Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
+    }));
     for (const inc of ranged) {
-      const key = inc.callType;
-      if (!counts[key]) counts[key] = { count: 0, cat: categorize(inc) };
-      counts[key].count++;
+      const hr = getHours(new Date(inc.time));
+      h[hr][categorize(inc)]++;
+      if (inc.isMajor) h[hr].Major++;
+      h[hr].total++;
     }
-    return Object.entries(counts)
-      .map(([name, { count, cat }]) => ({ name, count, cat }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 12);
+    return h;
   }, [ranged]);
 
-  // ── Summary stats ─────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const total = ranged.length;
-    const byCategory: Record<string, number> = {};
-    for (const inc of ranged) {
-      const c = categorize(inc);
-      byCategory[c] = (byCategory[c] ?? 0) + 1;
+  const maxHourTotal = Math.max(...hourlyData.map(h => h.total), 1);
+
+  // ── Major incident analytics ──────────────────────────────────
+  const majorHours = useMemo(() => {
+    const h = Array(24).fill(0);
+    for (const inc of majorInRange) h[getHours(new Date(inc.time))]++;
+    return h;
+  }, [majorInRange]);
+
+  const majorByType = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const inc of majorInRange) {
+      const ct = inc.callType;
+      m[ct] = (m[ct] ?? 0) + 1;
     }
-    const rangeDays = range === "1d" ? 1 : range === "7d" ? 7 : range === "30d" ? 30 : 365;
-    const avgPerDay = total / rangeDays;
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [majorInRange]);
 
-    // Busiest hour
-    const busiestHour = [...hourlyData].sort((a, b) => b.total - a.total)[0];
+  const majorByDay = useMemo(() => {
+    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const counts = Array(7).fill(0);
+    for (const inc of majorInRange) counts[new Date(inc.time).getDay()]++;
+    return days.map((d, i) => ({ day: d, count: counts[i] }));
+  }, [majorInRange]);
 
-    return { total, byCategory, avgPerDay, busiestHour };
-  }, [ranged, hourlyData, range]);
+  // ── Top call types ────────────────────────────────────────────
+  const topTypes = useMemo(() => {
+    const m: Record<string, { count: number; cat: string }> = {};
+    for (const inc of ranged) {
+      if (!m[inc.callType]) m[inc.callType] = { count: 0, cat: categorize(inc) };
+      m[inc.callType].count++;
+    }
+    return Object.entries(m)
+      .map(([name, { count, cat }]) => ({ name, count, cat }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [ranged]);
 
-  const VIEWS: { id: ChartView; label: string }[] = [
-    { id: "summary", label: "Summary" },
-    { id: "types",   label: "By Type" },
-    { id: "volume",  label: "By Hour" },
-    { id: "trend",   label: "Trend" },
-  ];
+  // ── Day-of-week ───────────────────────────────────────────────
+  const dowData = useMemo(() => {
+    const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const c = Array(7).fill(0);
+    for (const inc of ranged) c[new Date(inc.time).getDay()]++;
+    return names.map((d, i) => ({ day: d, count: c[i] }));
+  }, [ranged]);
+
+  const prevRanged = useMemo(() => {
+    const now = new Date();
+    const cutoffHours: Record<TimeRange, number> = { "1d": 24, "7d": 168, "30d": 720, "365d": 8760 };
+    const hours = cutoffHours[range];
+    return incidents.filter(i => {
+      const h = differenceInHours(now, new Date(i.time));
+      return h > hours && h <= hours * 2;
+    });
+  }, [incidents, range]);
+
+  const trend = total > 0 && prevRanged.length > 0
+    ? ((total - prevRanged.length) / prevRanged.length) * 100
+    : null;
+
+  const axisInterval = rangeDays <= 7 ? 0 : rangeDays <= 30 ? 3 : 7;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Time range selector */}
-      <div className="px-3 pt-3 pb-2 border-b border-white/5 shrink-0 space-y-2">
+
+      {/* ── Header ── */}
+      <div className="px-4 pt-3 pb-2.5 border-b border-white/5 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono text-muted-foreground">
-            {ranged.length} calls in range
-          </span>
-          <div className="flex gap-1">
+          <div>
+            <span className="text-xs font-semibold text-foreground">Analytics</span>
+            <span className="ml-2 text-[10px] text-muted-foreground/60 font-mono">{total} calls</span>
+          </div>
+          <div className="flex gap-1 bg-white/5 rounded-lg p-0.5">
             {(["1d","7d","30d","365d"] as TimeRange[]).map(r => (
               <button
                 key={r}
                 onClick={() => setRange(r)}
                 className={cn(
-                  "text-[10px] font-bold px-2 py-0.5 rounded-md transition-colors border",
+                  "text-[10px] font-bold px-2.5 py-1 rounded-md transition-all",
                   range === r
-                    ? "bg-primary/20 text-primary border-primary/30"
-                    : "text-muted-foreground border-white/8 hover:bg-white/5"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {RANGE_LABELS[r]}
+                {r === "1d" ? "24H" : r === "365d" ? "1Y" : r.toUpperCase()}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex gap-1">
-          {VIEWS.map(v => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              className={cn(
-                "flex-1 text-[10px] font-semibold py-1 rounded-md transition-colors border",
-                view === v.id
-                  ? "bg-primary/15 text-primary border-primary/25"
-                  : "text-muted-foreground border-white/8 hover:bg-white/5"
-              )}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
+      {/* ── Scrolling content ── */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-4 space-y-6">
 
-        {/* ── SUMMARY VIEW ── */}
-        {view === "summary" && (
-          <div className="space-y-4">
-            {/* KPI cards */}
+          {/* ── Overview KPIs ── */}
+          <section>
+            <SectionTitle>Overview</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/5 border border-white/8 rounded-xl p-3">
-                <p className="text-[10px] text-muted-foreground font-mono">Total Calls</p>
-                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-[10px] text-muted-foreground">{RANGE_LABELS[range]}</p>
-              </div>
-              <div className="bg-white/5 border border-white/8 rounded-xl p-3">
-                <p className="text-[10px] text-muted-foreground font-mono">Avg / Day</p>
-                <p className="text-2xl font-bold text-foreground">{stats.avgPerDay.toFixed(1)}</p>
-                <p className="text-[10px] text-muted-foreground">calls per day</p>
-              </div>
-              <div className="bg-white/5 border border-white/8 rounded-xl p-3">
-                <p className="text-[10px] text-muted-foreground font-mono">Busiest Hour</p>
-                <p className="text-2xl font-bold text-foreground">{stats.busiestHour?.label ?? "—"}</p>
-                <p className="text-[10px] text-muted-foreground">{stats.busiestHour?.total ?? 0} calls</p>
-              </div>
-              <div className="bg-white/5 border border-white/8 rounded-xl p-3">
-                <p className="text-[10px] text-muted-foreground font-mono">Top Type</p>
-                <p className="text-sm font-bold text-foreground leading-tight mt-0.5">
-                  {pieData[0]?.name ?? "—"}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{pieData[0]?.value ?? 0} calls ({stats.total > 0 ? Math.round((pieData[0]?.value ?? 0) / stats.total * 100) : 0}%)</p>
+              <KpiCard label="Total Calls" value={total} sub={`past ${range === "1d" ? "24 hours" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : "year"}`} />
+              <KpiCard label="Avg / Day" value={(total / rangeDays).toFixed(1)} sub="calls per day" />
+              <KpiCard label="Major Incidents" value={majorInRange.length} sub={`${total > 0 ? ((majorInRange.length / total) * 100).toFixed(1) : 0}% of calls`} color={CALL_COLORS.Major} />
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                <p className="text-[10px] text-muted-foreground/60 font-medium">vs. Prior Period</p>
+                {trend !== null ? (
+                  <div className="flex items-center gap-1.5">
+                    {trend > 5 ? <TrendingUp className="w-4 h-4 text-red-400" /> : trend < -5 ? <TrendingDown className="w-4 h-4 text-emerald-400" /> : <Minus className="w-4 h-4 text-muted-foreground" />}
+                    <span className={cn("text-xl font-bold leading-none", trend > 5 ? "text-red-400" : trend < -5 ? "text-emerald-400" : "text-foreground")}>
+                      {trend > 0 ? "+" : ""}{trend.toFixed(0)}%
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xl font-bold text-muted-foreground/40">—</p>
+                )}
+                <p className="text-[10px] text-muted-foreground/50">call volume change</p>
               </div>
             </div>
+          </section>
 
-            {/* Category breakdown bars */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Call Categories</p>
+          {/* ── Category split ── */}
+          <section>
+            <SectionTitle>By Category</SectionTitle>
+            <div className="space-y-2.5">
               {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => {
-                const count = stats.byCategory[cat] ?? 0;
-                const pct = stats.total > 0 ? (count / stats.total) * 100 : 0;
+                const count = catCounts[cat];
+                const pct = total > 0 ? (count / total) * 100 : 0;
                 const color = CALL_COLORS[cat];
-                const icons: Record<string, React.ReactNode> = {
-                  Medical: <span style={{color}}>✚</span>,
-                  Fire:    <Flame className="w-3 h-3" style={{color}} />,
-                  Police:  <Shield className="w-3 h-3" style={{color}} />,
-                  Traffic: <Car className="w-3 h-3" style={{color}} />,
-                  Other:   <AlertTriangle className="w-3 h-3" style={{color}} />,
-                };
                 return (
                   <div key={cat}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <div className="flex items-center gap-1.5 text-xs">
-                        {icons[cat]}
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-foreground/80 font-medium">{cat}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono text-muted-foreground">{pct.toFixed(1)}%</span>
-                        <span className="text-xs font-bold" style={{color}}>{count}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground/50 font-mono text-[10px]">{pct.toFixed(1)}%</span>
+                        <span className="font-bold w-6 text-right" style={{ color }}>{count}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-white/5 rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${pct}%`, backgroundColor: color }}
-                      />
+                    <div className="w-full bg-white/5 rounded-full h-1">
+                      <div className="h-1 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color + "cc" }} />
                     </div>
                   </div>
                 );
               })}
             </div>
+          </section>
 
-            {/* Top 5 call types */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Most Common Calls</p>
-              {topCallTypes.slice(0, 6).map((ct, i) => (
-                <div key={ct.name} className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-muted-foreground/50 w-4 text-right">{i+1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] text-foreground/80 truncate">{ct.name}</span>
-                      <span className="text-[10px] font-bold shrink-0" style={{color: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff"}}>
-                        {ct.count}
-                      </span>
+          {/* ── Comparative trend lines ── */}
+          <section>
+            <SectionTitle>Trends by Type</SectionTitle>
+            <div className="h-48 -mx-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={axisInterval} />
+                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={TT} itemStyle={{ color: "#cbd5e1" }} />
+                  {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => (
+                    <Line key={cat} type="monotone" dataKey={cat} stroke={CALL_COLORS[cat]} strokeWidth={1.5} dot={false} name={cat} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+              {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => (
+                <div key={cat} className="flex items-center gap-1.5">
+                  <span className="w-3 h-0.5 rounded inline-block" style={{ backgroundColor: CALL_COLORS[cat] }} />
+                  <span className="text-[10px] text-muted-foreground/60">{cat}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Total volume trend ── */}
+          <section>
+            <SectionTitle>Total Call Volume</SectionTitle>
+            <div className="h-36 -mx-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dailyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                  <defs>
+                    <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} interval={axisInterval} />
+                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={TT} />
+                  <Area type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={1.5} fill="url(#totalGrad)" dot={false} name="Total" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* ── Hour-of-day pattern ── */}
+          <section>
+            <SectionTitle>Hour of Day Pattern</SectionTitle>
+            <div className="h-40 -mx-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }} barSize={5} barGap={0}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={TT} />
+                  <Bar dataKey="Medical" stackId="s" fill={CALL_COLORS.Medical} />
+                  <Bar dataKey="Fire"    stackId="s" fill={CALL_COLORS.Fire} />
+                  <Bar dataKey="Police"  stackId="s" fill={CALL_COLORS.Police} />
+                  <Bar dataKey="Traffic" stackId="s" fill={CALL_COLORS.Traffic} />
+                  <Bar dataKey="Other"   stackId="s" fill={CALL_COLORS.Other} radius={[2,2,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {PERIODS.map(p => {
+                const cnt = p.hours.reduce((s, h) => s + hourlyData[h].total, 0);
+                return (
+                  <div key={p.label} className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.05] rounded-lg px-2.5 py-2">
+                    <span className="text-base">{p.icon}</span>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground/60">{p.label}</p>
+                      <p className="text-sm font-bold">{cnt} <span className="text-[9px] text-muted-foreground/50 font-normal">calls</span></p>
                     </div>
-                    <div className="w-full bg-white/5 rounded-full h-1 mt-0.5">
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ── Major Incident Analytics ── */}
+          <section>
+            <SectionTitle>Major Incidents</SectionTitle>
+            {majorInRange.length === 0 ? (
+              <p className="text-xs text-muted-foreground/40 py-4 text-center">No major incidents in this period.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <KpiCard label="Major Calls" value={majorInRange.length} color={CALL_COLORS.Major} />
+                  <KpiCard
+                    label="Rate"
+                    value={`${total > 0 ? ((majorInRange.length / total) * 100).toFixed(1) : 0}%`}
+                    sub="of all calls"
+                    color={CALL_COLORS.Major}
+                  />
+                </div>
+
+                {/* Major calls by hour */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">Major calls by hour</p>
+                  <div className="h-28 -mx-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={hourlyData.map((h, i) => ({ ...h, Major: majorHours[i] }))} margin={{ top: 2, right: 8, bottom: 0, left: -24 }} barSize={5}>
+                        <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 8, fill: "#475569" }} tickLine={false} axisLine={false} interval={2} />
+                        <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip contentStyle={TT} />
+                        <Bar dataKey="Major" fill={CALL_COLORS.Major} radius={[2,2,0,0]} name="Major" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Major calls by day of week */}
+                <div>
+                  <p className="text-[10px] text-muted-foreground/50 mb-1.5">Major calls by day of week</p>
+                  <div className="space-y-1">
+                    {majorByDay.map(d => (
+                      <div key={d.day} className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground/60 w-7">{d.day}</span>
+                        <div className="flex-1 bg-white/5 rounded-full h-1.5">
+                          <div
+                            className="h-1.5 rounded-full"
+                            style={{
+                              width: `${Math.max(...majorByDay.map(x => x.count)) > 0 ? (d.count / Math.max(...majorByDay.map(x => x.count))) * 100 : 0}%`,
+                              backgroundColor: CALL_COLORS.Major + "bb",
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-amber-400 w-4 text-right">{d.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Top major call types */}
+                {majorByType.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground/50 mb-1.5">Most common major calls</p>
+                    <div className="space-y-1.5">
+                      {majorByType.map(([name, count]) => (
+                        <div key={name} className="flex items-center gap-2">
+                          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="flex-1 text-[11px] text-foreground/70 truncate">{name}</span>
+                          <span className="text-xs font-bold text-amber-400">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* ── Top Call Types ── */}
+          <section>
+            <SectionTitle>Most Common Calls</SectionTitle>
+            <div className="space-y-2">
+              {topTypes.map((ct, i) => (
+                <div key={ct.name} className="flex items-center gap-2">
+                  <span className="text-[9px] font-mono text-muted-foreground/30 w-4 text-right">{i+1}</span>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }} />
+                  <span className="flex-1 text-[11px] text-foreground/75 truncate">{ct.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-12 bg-white/5 rounded-full h-1">
                       <div
                         className="h-1 rounded-full"
                         style={{
-                          width: `${(ct.count / (topCallTypes[0]?.count ?? 1)) * 100}%`,
-                          backgroundColor: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff",
-                          opacity: 0.7,
+                          width: `${topTypes[0]?.count > 0 ? (ct.count / topTypes[0].count) * 100 : 0}%`,
+                          backgroundColor: (CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff") + "99",
                         }}
                       />
                     </div>
+                    <span className="text-xs font-bold" style={{ color: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff" }}>{ct.count}</span>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          </section>
 
-        {/* ── BY TYPE VIEW ── */}
-        {view === "types" && (
-          <div className="space-y-4">
-            <div className="h-44">
+          {/* ── Day of Week ── */}
+          <section>
+            <SectionTitle>Day of Week</SectionTitle>
+            <div className="h-32 -mx-1">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={45}
-                    outerRadius={75}
-                    paddingAngle={2}
-                  >
-                    {pieData.map(entry => (
-                      <Cell key={entry.name} fill={CALL_COLORS[entry.name as keyof typeof CALL_COLORS] ?? "#94a3b8"} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v} calls`, ""]} />
-                </PieChart>
+                <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "#475569" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={TT} />
+                  <Bar dataKey="count" fill="#6366f1" fillOpacity={0.7} radius={[3,3,0,0]} name="Calls" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
+          </section>
 
-            {/* Legend */}
-            <div className="space-y-1">
-              {pieData.map(d => {
-                const pct = stats.total > 0 ? (d.value / stats.total * 100).toFixed(1) : "0";
-                const color = CALL_COLORS[d.name as keyof typeof CALL_COLORS] ?? "#94a3b8";
-                return (
-                  <div key={d.name} className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{backgroundColor: color}} />
-                    <span className="text-xs text-foreground/80 flex-1">{d.name}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{pct}%</span>
-                    <span className="text-xs font-bold" style={{color}}>{d.value}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Full call type breakdown */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">All Call Types</p>
-              {topCallTypes.map((ct, i) => (
-                <div key={ct.name} className="flex items-center gap-2">
-                  <span className="text-[9px] w-4 text-right font-mono text-muted-foreground/40">{i+1}</span>
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{backgroundColor: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff"}}
-                  />
-                  <span className="flex-1 text-[11px] text-foreground/70 truncate">{ct.name}</span>
-                  <span className="text-xs font-bold shrink-0" style={{color: CALL_COLORS[ct.cat as keyof typeof CALL_COLORS] ?? "#fff"}}>
-                    {ct.count}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── BY HOUR VIEW ── */}
-        {view === "volume" && (
-          <div className="space-y-4">
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                Call Volume by Hour of Day
-              </p>
-              <div className="h-52">
+          {/* ── Pie breakdown ── */}
+          <section>
+            <SectionTitle>Call Type Distribution</SectionTitle>
+            <div className="flex items-center gap-4">
+              <div className="h-32 w-32 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }} barSize={6} barGap={1}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 9, fill: "#64748b" }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval={2}
-                    />
-                    <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Bar dataKey="Medical" stackId="a" fill={CALL_COLORS.Medical} radius={[0,0,0,0]} />
-                    <Bar dataKey="Fire"    stackId="a" fill={CALL_COLORS.Fire}    radius={[0,0,0,0]} />
-                    <Bar dataKey="Police"  stackId="a" fill={CALL_COLORS.Police}  radius={[0,0,0,0]} />
-                    <Bar dataKey="Traffic" stackId="a" fill={CALL_COLORS.Traffic} radius={[0,0,0,0]} />
-                    <Bar dataKey="Other"   stackId="a" fill={CALL_COLORS.Other}   radius={[2,2,0,0]} />
-                  </BarChart>
+                  <PieChart>
+                    <Pie data={Object.entries(catCounts).map(([name, value]) => ({ name, value }))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={55} paddingAngle={2}>
+                      {Object.keys(catCounts).map(cat => (
+                        <Cell key={cat} fill={CALL_COLORS[cat as keyof typeof CALL_COLORS] ?? "#94a3b8"} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TT} formatter={(v) => [`${v}`, ""]} />
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-
-            {/* Peak hours */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Peak Hours</p>
-              {[...hourlyData]
-                .sort((a, b) => b.total - a.total)
-                .slice(0, 6)
-                .map((h, i) => (
-                  <div key={h.hour} className="flex items-center gap-2">
-                    <span className="text-[9px] w-4 text-right font-mono text-muted-foreground/40">{i+1}</span>
-                    <span className="text-xs font-mono text-foreground/80 w-8">{h.label}</span>
-                    <div className="flex-1 bg-white/5 rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full bg-primary/60"
-                        style={{ width: `${hourlyData[0]?.total > 0 ? (h.total / Math.max(...hourlyData.map(x => x.total))) * 100 : 0}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-foreground/70">{h.total}</span>
+              <div className="flex-1 space-y-1.5">
+                {(["Medical","Fire","Police","Traffic","Other"] as const).map(cat => (
+                  <div key={cat} className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: CALL_COLORS[cat] }} />
+                    <span className="text-[11px] text-foreground/70 flex-1">{cat}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground/50">{total > 0 ? ((catCounts[cat] / total) * 100).toFixed(0) : 0}%</span>
                   </div>
-                ))
-              }
-            </div>
-
-            {/* Time-of-day summary: overnight, morning, afternoon, evening */}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Overnight", hours: [0,1,2,3,4,5], icon: "🌙" },
-                { label: "Morning",   hours: [6,7,8,9,10,11], icon: "🌅" },
-                { label: "Afternoon", hours: [12,13,14,15,16,17], icon: "☀️" },
-                { label: "Evening",   hours: [18,19,20,21,22,23], icon: "🌆" },
-              ].map(period => {
-                const total = period.hours.reduce((s, h) => s + (hourlyData[h]?.total ?? 0), 0);
-                return (
-                  <div key={period.label} className="bg-white/5 border border-white/8 rounded-xl p-2.5">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-sm">{period.icon}</span>
-                      <span className="text-[10px] text-muted-foreground font-medium">{period.label}</span>
-                    </div>
-                    <p className="text-xl font-bold text-foreground">{total}</p>
-                    <p className="text-[9px] text-muted-foreground/60">
-                      {stats.total > 0 ? ((total / stats.total) * 100).toFixed(0) : 0}% of calls
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── TREND VIEW ── */}
-        {view === "trend" && (
-          <div className="space-y-4">
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                Daily Call Volume
-              </p>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }} barSize={range === "365d" ? 3 : 8} barGap={1}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 9, fill: "#64748b" }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval={range === "365d" ? 6 : range === "30d" ? 4 : 0}
-                    />
-                    <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Bar dataKey="Medical" stackId="a" fill={CALL_COLORS.Medical} />
-                    <Bar dataKey="Fire"    stackId="a" fill={CALL_COLORS.Fire}    />
-                    <Bar dataKey="Police"  stackId="a" fill={CALL_COLORS.Police}  />
-                    <Bar dataKey="Traffic" stackId="a" fill={CALL_COLORS.Traffic} />
-                    <Bar dataKey="Other"   stackId="a" fill={CALL_COLORS.Other}   radius={[2,2,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                ))}
               </div>
             </div>
+          </section>
 
-            {/* Line chart of totals */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                Total Trend
-              </p>
-              <div className="h-36">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 9, fill: "#64748b" }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval={range === "365d" ? 8 : range === "30d" ? 4 : 0}
-                    />
-                    <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#6366f1"
-                      strokeWidth={1.5}
-                      dot={false}
-                      name="Total"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Day-of-week breakdown */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">By Day of Week</p>
-              {(() => {
-                const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-                const dayCounts = Array(7).fill(0);
-                for (const inc of ranged) {
-                  dayCounts[new Date(inc.time).getDay()]++;
-                }
-                const maxDay = Math.max(...dayCounts);
-                return dayNames.map((d, i) => (
-                  <div key={d} className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-foreground/60 w-6">{d}</span>
-                    <div className="flex-1 bg-white/5 rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full bg-indigo-400/60"
-                        style={{ width: maxDay > 0 ? `${(dayCounts[i] / maxDay) * 100}%` : "0%" }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-foreground/70 w-5 text-right">{dayCounts[i]}</span>
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-        )}
-
+          <div className="h-4" />
+        </div>
       </div>
     </div>
   );
