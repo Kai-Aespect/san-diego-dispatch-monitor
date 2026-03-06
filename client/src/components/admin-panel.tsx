@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   Lock, Unlock, Plus, Trash2, Edit3, Save, X, GripVertical,
-  Link, FileText, Shield, BarChart2, CheckSquare, Square, Archive, Pin, PinOff
+  Link, FileText, Shield, BarChart2, CheckSquare, Square, Archive, Pin, PinOff,
+  LockKeyhole, LockKeyholeOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,22 +44,24 @@ interface NewCardState {
   content: string;
   url: string;
   color: string;
+  keyLocked: boolean;
   pollQuestion: string;
   pollOptions: string[];
 }
 
 const DEFAULT_NEW: NewCardState = {
   type: "text", title: "", content: "", url: "", color: "blue",
-  pollQuestion: "", pollOptions: ["", ""],
+  keyLocked: false, pollQuestion: "", pollOptions: ["", ""],
 };
 
 function SortableCard({
-  card, onEdit, onDelete, onTogglePin,
+  card, onEdit, onDelete, onTogglePin, onToggleKeyLock,
 }: {
   card: AdminCardListResponse[0];
   onEdit: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
+  onToggleKeyLock: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -85,11 +88,17 @@ function SortableCard({
            card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
            <FileText className="w-3 h-3 shrink-0" />}
           <span className="truncate">{card.title}</span>
-          {card.pinned && <span className="text-[9px] opacity-50 ml-auto shrink-0">PINNED</span>}
+          <div className="flex items-center gap-1 ml-auto shrink-0">
+            {card.keyLocked && <span className="text-[9px] text-amber-400/70">KEY</span>}
+            {card.pinned && <span className="text-[9px] opacity-50">PINNED</span>}
+          </div>
         </div>
         {card.content && <p className="text-[11px] text-foreground/60 truncate">{card.content}</p>}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button onClick={onToggleKeyLock} title={card.keyLocked ? "Remove key lock" : "Require key to view"} className="p-0.5 text-muted-foreground hover:text-amber-400 transition-colors">
+          {card.keyLocked ? <LockKeyhole className="w-3 h-3 text-amber-400" /> : <LockKeyholeOpen className="w-3 h-3" />}
+        </button>
         <button onClick={onTogglePin} title={card.pinned ? "Unpin" : "Pin"} className="p-0.5 text-muted-foreground hover:text-amber-400 transition-colors">
           {card.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
         </button>
@@ -247,6 +256,7 @@ function AdminBoardSection() {
       content: newCard.content,
       color: newCard.color,
       pinned: false,
+      keyLocked: newCard.keyLocked,
       sortOrder: 0,
     };
     if (newCard.type === "link") body.url = newCard.url;
@@ -286,6 +296,15 @@ function AdminBoardSection() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pinned: !card.pinned }),
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/cards'] });
+  };
+
+  const toggleKeyLock = async (card: AdminCardListResponse[0]) => {
+    await fetch(`/api/admin/cards/${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyLocked: !card.keyLocked }),
     });
     queryClient.invalidateQueries({ queryKey: ['/api/admin/cards'] });
   };
@@ -359,6 +378,20 @@ function AdminBoardSection() {
               )}
             </div>
           )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setNewCard({ ...newCard, keyLocked: !newCard.keyLocked })}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-all",
+                newCard.keyLocked
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                  : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {newCard.keyLocked ? <LockKeyhole className="w-3 h-3" /> : <LockKeyholeOpen className="w-3 h-3" />}
+              <span>{newCard.keyLocked ? "Key Locked" : "Public"}</span>
+            </button>
+          </div>
           <div className="flex gap-2">
             <Button size="sm" className="flex-1 h-7 text-xs" onClick={addCard}>
               <Save className="w-3 h-3 mr-1" /> Save Card
@@ -385,6 +418,7 @@ function AdminBoardSection() {
                   onEdit={() => setEditingId(card.id)}
                   onDelete={() => deleteCard(card.id)}
                   onTogglePin={() => togglePin(card)}
+                  onToggleKeyLock={() => toggleKeyLock(card)}
                 />
               ))}
             </SortableContext>
@@ -403,6 +437,7 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   const [content, setContent] = useState(card.content);
   const [url, setUrl] = useState(card.url || "");
   const [color, setColor] = useState(card.color);
+  const [keyLocked, setKeyLocked] = useState(card.keyLocked ?? false);
 
   // Poll-specific state — loaded from the live poll if this card has one
   const [pollQuestion, setPollQuestion] = useState("");
@@ -423,7 +458,7 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   }, [card.type, card.pollId, pollLoaded]);
 
   const save = async () => {
-    const cardBody: Record<string, unknown> = { title, color };
+    const cardBody: Record<string, unknown> = { title, color, keyLocked };
     if (card.type !== "poll") cardBody.content = content;
     if (card.type === "link") cardBody.url = url || undefined;
 
@@ -497,6 +532,20 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
           )}
         </div>
       )}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setKeyLocked(!keyLocked)}
+          className={cn(
+            "flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-all",
+            keyLocked
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {keyLocked ? <LockKeyhole className="w-3 h-3" /> : <LockKeyholeOpen className="w-3 h-3" />}
+          <span>{keyLocked ? "Key Locked" : "Public"}</span>
+        </button>
+      </div>
       <div className="flex gap-2">
         <Button size="sm" className="flex-1 h-7 text-xs" onClick={save}><Save className="w-3 h-3 mr-1" /> Save</Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={onCancel}>Cancel</Button>

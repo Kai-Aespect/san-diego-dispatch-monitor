@@ -43,6 +43,7 @@ export const adminCards = pgTable("admin_cards", {
   url: text("url"),
   color: text("color").notNull().default("blue"),
   pinned: boolean("pinned").default(false),
+  keyLocked: boolean("key_locked").default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   pollId: integer("poll_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
