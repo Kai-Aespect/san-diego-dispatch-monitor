@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, Lock } from "lucide-react";
+import { useState } from "react";
+import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, Lock, Key, AlertCircle, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AdminCardListResponse } from "@shared/routes";
 import { useAuthKey } from "@/hooks/use-auth-key";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const COLOR_MAP: Record<string, string> = {
   blue:   "bg-blue-500/15 border-blue-500/25 text-blue-400",
@@ -28,7 +30,7 @@ function getVoterToken(): string {
   return tok;
 }
 
-function PollCard({ pollId, cardColor }: { pollId: number; cardColor: string }) {
+function PollCard({ pollId }: { pollId: number }) {
   const voterToken = getVoterToken();
   const qc = useQueryClient();
 
@@ -117,12 +119,70 @@ function PollCard({ pollId, cardColor }: { pollId: number; cardColor: string }) 
   );
 }
 
+function LockedCardOverlay({ authorize }: { authorize: (key: string) => boolean }) {
+  const [keyVal, setKeyVal] = useState("");
+  const [error, setError] = useState(false);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (authorize(keyVal)) {
+      setKeyVal("");
+    } else {
+      setError(true);
+      setKeyVal("");
+      setTimeout(() => setError(false), 2000);
+    }
+  };
+
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-black/65 backdrop-blur-sm px-4 py-3 gap-2">
+      <div className="flex items-center gap-1.5 text-amber-400">
+        <Lock className="w-3.5 h-3.5" />
+        <span className="text-xs font-bold">Key Required</span>
+      </div>
+      <p className="text-[10px] text-muted-foreground text-center leading-snug">
+        Enter your authorization key to view this note.
+      </p>
+      <form onSubmit={handleSubmit} className="w-full flex gap-1.5 mt-0.5">
+        <div className="relative flex-1">
+          <Key className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+          <Input
+            type="password"
+            placeholder="Auth key..."
+            value={keyVal}
+            onChange={(e) => { setKeyVal(e.target.value); setError(false); }}
+            className={cn(
+              "pl-7 h-8 text-xs bg-black/60 border-white/10 font-mono tracking-widest",
+              error && "border-destructive"
+            )}
+          />
+        </div>
+        <Button
+          type="submit"
+          size="sm"
+          className="h-8 px-2.5 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold gap-1 shrink-0"
+        >
+          <ShieldCheck className="w-3 h-3" />
+          Unlock
+        </Button>
+      </form>
+      {error && (
+        <div className="flex items-center gap-1 text-destructive text-[10px]">
+          <AlertCircle className="w-3 h-3" />
+          Invalid key — try again
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InfoBoard() {
   const { data: cards = [], isLoading } = useQuery<AdminCardListResponse>({
     queryKey: ['/api/admin/cards'],
     refetchInterval: 15000,
   });
-  const { isAuthorized, AuthPrompt } = useAuthKey();
+
+  const { isAuthorized, authorize } = useAuthKey();
 
   if (isLoading) {
     return (
@@ -143,32 +203,21 @@ export function InfoBoard() {
     );
   }
 
-  const hasLockedCards = cards.some(c => c.isKeyLocked);
-
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      {hasLockedCards && !isAuthorized && (
-        <div className="px-4 py-3 border-b border-white/5 bg-amber-500/5">
-          <AuthPrompt 
-            title="Restricted Content" 
-            description="Some information on this board requires a security key to view."
-          />
-        </div>
-      )}
+    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
+      {cards.map(card => {
+        const isLocked = card.isKeyLocked && !isAuthorized;
+        const colorClass = getColorClass(card.color);
+        const typeIcon =
+          card.type === "link" ? <Link className="w-3 h-3 shrink-0" /> :
+          card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
+          card.type === "poll" ? <BarChart2 className="w-3 h-3 shrink-0" /> :
+          <FileText className="w-3 h-3 shrink-0" />;
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
-        {cards.map(card => {
-          if (card.isKeyLocked && !isAuthorized) return null;
-
-          const colorClass = getColorClass(card.color);
-          const typeIcon =
-            card.type === "link" ? <Link className="w-3 h-3 shrink-0" /> :
-            card.type === "announcement" ? <Shield className="w-3 h-3 shrink-0" /> :
-            card.type === "poll" ? <BarChart2 className="w-3 h-3 shrink-0" /> :
-            <FileText className="w-3 h-3 shrink-0" />;
-
-          return (
-            <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5", colorClass)}>
+        return (
+          <div key={card.id} className={cn("rounded-xl border p-3 space-y-1.5 relative overflow-hidden", colorClass)}>
+            {/* Card content — blurred when locked */}
+            <div className={cn("space-y-1.5 transition-all", isLocked && "blur-sm select-none pointer-events-none")}>
               <div className="flex items-center gap-1.5 text-xs font-semibold">
                 {typeIcon}
                 <span>{card.title}</span>
@@ -179,7 +228,7 @@ export function InfoBoard() {
               </div>
 
               {card.type === "poll" && card.pollId ? (
-                <PollCard pollId={card.pollId} cardColor={card.color} />
+                <PollCard pollId={card.pollId} />
               ) : (
                 <>
                   {card.content && (
@@ -199,17 +248,12 @@ export function InfoBoard() {
                 </>
               )}
             </div>
-          );
-        })}
 
-        {/* Placeholder if all cards are hidden */}
-        {cards.every(c => c.isKeyLocked) && !isAuthorized && (
-          <div className="flex flex-col items-center justify-center py-12 text-center opacity-30">
-            <Lock className="w-8 h-8 mb-2" />
-            <p className="text-xs">All current cards are key-locked.</p>
+            {/* Overlay shown on top of blurred content */}
+            {isLocked && <LockedCardOverlay authorize={authorize} />}
           </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 }
