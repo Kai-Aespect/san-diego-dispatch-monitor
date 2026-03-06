@@ -172,6 +172,8 @@ export default function Dashboard() {
         }
         case "has_notes": if (!incident.notes && (!incident.tags || incident.tags.length === 0)) return false; break;
         case "no_units": if (incident.units && incident.units.length > 0) return false; break;
+        case "police_only": if (incident.agency !== "police") return false; break;
+        case "non_medical": if (incident.callTypeFamily === "Medical") return false; break;
       }
       return true;
     }).sort((a, b) => {
@@ -393,13 +395,15 @@ function CallListContent({
             </SelectTrigger>
             <SelectContent className="bg-card border-white/10">
               <SelectItem value="all">All Incidents</SelectItem>
-              <SelectItem value="new_updated">🔴 New / Updated</SelectItem>
-              <SelectItem value="major">⚠️ Major Incidents</SelectItem>
-              <SelectItem value="medical">🟢 Medical Calls</SelectItem>
-              <SelectItem value="fire_calls">🔥 Fire Calls Only</SelectItem>
-              <SelectItem value="traffic">🚗 Traffic / Accidents</SelectItem>
-              <SelectItem value="has_notes">📝 Has Notes or Tags</SelectItem>
-              <SelectItem value="no_units">❓ No Units Assigned</SelectItem>
+              <SelectItem value="new_updated">New / Updated</SelectItem>
+              <SelectItem value="major">Major Incidents</SelectItem>
+              <SelectItem value="medical">Medical Calls</SelectItem>
+              <SelectItem value="fire_calls">Fire Calls Only</SelectItem>
+              <SelectItem value="traffic">Traffic / Accidents</SelectItem>
+              <SelectItem value="has_notes">Has Notes or Tags</SelectItem>
+              <SelectItem value="no_units">No Units Assigned</SelectItem>
+              <SelectItem value="police_only">Police Calls Only</SelectItem>
+              <SelectItem value="non_medical">Non-Medical (All)</SelectItem>
             </SelectContent>
           </Select>
 
