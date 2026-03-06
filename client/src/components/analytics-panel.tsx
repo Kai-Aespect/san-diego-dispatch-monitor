@@ -101,13 +101,17 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 
 export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    overview: true,
+    cat: true,
+    trends: true,
+    vol: true,
     hour: true,
     major: true,
     top: true,
     dow: true,
     dist: true,
-    heatmap: false,
-    predictions: false,
+    heatmap: true,
+    predictions: true,
   });
   const toggle = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
