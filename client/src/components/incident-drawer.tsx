@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useBookmarks } from "@/hooks/use-bookmarks";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
 
 interface IncidentDrawerProps {
   incident: IncidentListResponse[0] | null;
@@ -47,13 +48,13 @@ const SYSTEM_ONLY_FIELDS = new Set(["lat", "lng"]);
 
 export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawerProps) {
   const { toast } = useToast();
+  const { isAdmin: unlocked, checkPinAsync, getStoredPin } = useAdminAuth();
   const [notes, setNotes] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [pin, setPin] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
   const [pinError, setPinError] = useState("");
   const { isBookmarked, toggleBookmark } = useBookmarks();
 
@@ -74,7 +75,6 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     if (incident) {
       setNotes(incident.notes || "");
       setTags(incident.tags || []);
-      setUnlocked(false);
       setPin("");
       setPinError("");
     }
@@ -85,24 +85,18 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const bookmarked = isBookmarked(incident.id);
 
   const handleSave = async () => {
-    if (isSaving) return;
-    if (!unlocked && (notes !== (incident.notes || "") || JSON.stringify(tags) !== JSON.stringify(incident.tags || []))) {
-      // Need unlock
-      return;
-    }
+    if (isSaving || !unlocked) return;
     setIsSaving(true);
     try {
-      const res = await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags, pin });
+      const res = await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags, pin: getStoredPin() });
       if (res.ok) {
         queryClient.setQueryData(["/api/incidents"], (old: any) =>
           old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
         );
         refetchHistory();
-        setUnlocked(false);
-        setPin("");
-        setPinError("");
+        toast({ title: "Saved", description: "Changes saved successfully." });
       } else {
-        setPinError("Invalid Key PIN — try again.");
+        setPinError("Save failed — PIN may have expired.");
       }
     } catch (e) {
       console.error("Save failed", e);
@@ -299,13 +293,9 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                         className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
                         onClick={async () => {
                           setPinError("");
-                          const res = await fetch('/api/validate-pin', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ pin })
-                          });
-                          if (res.ok) { setUnlocked(true); setPinError(""); }
-                          else setPinError("Invalid PIN — try again.");
+                          const ok = await checkPinAsync(pin);
+                          if (!ok) setPinError("Invalid PIN — try again.");
+                          else setPin("");
                         }}
                       >
                         Unlock
