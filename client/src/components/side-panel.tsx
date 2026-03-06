@@ -36,14 +36,14 @@ export function SidePanel({ incidents, onSelectIncident }: SidePanelProps) {
     testId: string;
     badge?: number;
   }> = [
-    { id: "bookmarks", icon: <Bookmark className="w-[15px] h-[15px]" />,   label: "Tracked",   testId: "tab-bookmarks",  badge: bookmarkedIds.length },
-    { id: "notes",     icon: <StickyNote className="w-[15px] h-[15px]" />, label: "Notes",     testId: "tab-notes" },
-    { id: "units",     icon: <Radio className="w-[15px] h-[15px]" />,      label: "Units",     testId: "tab-units",      badge: activeUnitCount },
-    { id: "analytics", icon: <BarChart2 className="w-[15px] h-[15px]" />,  label: "Analytics", testId: "tab-analytics" },
-    { id: "info",      icon: <Shield className="w-[15px] h-[15px]" />,     label: "Info",      testId: "tab-info" },
-    { id: "reference", icon: <BookOpen className="w-[15px] h-[15px]" />,   label: "Ref",       testId: "tab-reference" },
-    { id: "admin",     icon: <Lock className="w-[15px] h-[15px]" />,       label: "Admin",     testId: "tab-admin" },
-    { id: "settings",  icon: <Settings className="w-[15px] h-[15px]" />,   label: "Settings",  testId: "tab-settings" },
+    { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length },
+    { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "Notes",   testId: "tab-notes" },
+    { id: "units",     icon: <Radio className="w-4 h-4" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount },
+    { id: "analytics", icon: <BarChart2 className="w-4 h-4" />,  label: "Stats",   testId: "tab-analytics" },
+    { id: "info",      icon: <Shield className="w-4 h-4" />,     label: "Info",    testId: "tab-info" },
+    { id: "reference", icon: <BookOpen className="w-4 h-4" />,   label: "Ref",     testId: "tab-reference" },
+    { id: "admin",     icon: <Lock className="w-4 h-4" />,       label: "Admin",   testId: "tab-admin" },
+    { id: "settings",  icon: <Settings className="w-4 h-4" />,   label: "Set",     testId: "tab-settings" },
   ];
 
   return (
@@ -74,7 +74,7 @@ export function SidePanel({ incidents, onSelectIncident }: SidePanelProps) {
       </div>
 
       {/* ── Vertical nav — RIGHT side ── */}
-      <nav className="flex flex-col shrink-0 w-[50px] border-l border-white/5 bg-[#0a0c18]/70 py-1.5 gap-px overflow-y-auto">
+      <nav className="flex flex-col shrink-0 w-[58px] border-l border-white/5 bg-[#0a0c18]/70 py-2 gap-0.5 overflow-y-auto">
         {TABS.map(tab => {
           const active = activeTab === tab.id;
           const adminActive = tab.id === "admin" && isAdmin;
@@ -85,34 +85,34 @@ export function SidePanel({ incidents, onSelectIncident }: SidePanelProps) {
               title={tab.label}
               data-testid={tab.testId}
               className={cn(
-                "relative mx-1.5 flex flex-col items-center justify-center gap-[3px] py-[9px] rounded-lg",
-                "text-[8px] font-semibold leading-none tracking-wide uppercase",
-                "transition-all duration-150 group",
+                "relative mx-1.5 flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg",
+                "text-[10px] font-medium leading-none",
+                "transition-all duration-150",
                 active
                   ? "bg-primary/15 text-primary"
                   : adminActive
                   ? "text-emerald-400 hover:bg-white/5"
-                  : "text-muted-foreground/60 hover:text-foreground hover:bg-white/5"
+                  : "text-muted-foreground/50 hover:text-foreground/80 hover:bg-white/5"
               )}
             >
               {/* Active right-edge bar */}
               {active && (
-                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-l-full bg-primary" />
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-6 rounded-l-full bg-primary" />
               )}
 
               {tab.icon}
-              <span>{tab.label}</span>
+              <span className="w-full text-center px-0.5 truncate">{tab.label}</span>
 
               {/* Badge */}
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="absolute top-0.5 right-0.5 min-w-[13px] h-[13px] px-0.5 rounded-full bg-primary text-primary-foreground text-[7px] font-bold flex items-center justify-center leading-none">
+                <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-primary-foreground text-[8px] font-bold flex items-center justify-center leading-none">
                   {tab.badge > 99 ? "99" : tab.badge}
                 </span>
               )}
 
               {/* Admin online dot */}
               {adminActive && !active && (
-                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0a0c18]" />
               )}
             </button>
           );
