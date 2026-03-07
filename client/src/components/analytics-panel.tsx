@@ -159,7 +159,11 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   }
 
   // ── Derived data ─────────────────────────────────────────────
-  const now = useMemo(() => new Date(), []);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const ranged = useMemo(() =>
     incidents.filter(i => differenceInMinutes(now, new Date(i.time)) <= rangeMinutes),
