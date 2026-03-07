@@ -68,7 +68,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
       return res.json();
     },
     enabled: !!incident && isOpen,
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
 
   useEffect(() => {

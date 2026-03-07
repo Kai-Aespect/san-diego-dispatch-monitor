@@ -21,8 +21,7 @@ export function useIncidents() {
       const data = await res.json();
       return parseWithLogging(api.incidents.list.responses[200], data, "incidents.list");
     },
-    // Poll every 5 seconds for near-real-time updates
-    refetchInterval: 5000,
+    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
 }

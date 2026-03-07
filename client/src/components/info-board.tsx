@@ -43,7 +43,7 @@ function PollCard({ pollId, cardColor }: { pollId: number; cardColor: string }) 
         total: number;
       }>;
     },
-    refetchInterval: 4000,
+    refetchInterval: 30000,
   });
 
   const [voting, setVoting] = useState(false);
@@ -180,7 +180,7 @@ export function InfoBoard() {
 
   const { data: cards = [], isLoading } = useQuery<AdminCardListResponse>({
     queryKey: ['/api/admin/cards'],
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
 
   const hasLockedCards = cards.some(c => c.keyLocked);

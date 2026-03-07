@@ -14,7 +14,7 @@ export async function registerRoutes(
   
   setInterval(() => {
     syncData(storage).catch(console.error);
-  }, 5000);
+  }, 60000);
 
   // Prune old incidents every hour
   setInterval(() => {

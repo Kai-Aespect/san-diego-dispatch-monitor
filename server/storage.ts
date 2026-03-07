@@ -399,7 +399,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async pruneOldIncidents(): Promise<void> {
-    const cutoff = subDays(new Date(), 30);
+    const cutoff = subDays(new Date(), 7);
     // Find old inactive incidents to aggregate before deleting
     const old = await db.select().from(incidents)
       .where(and(eq(incidents.active, false), lt(incidents.time, cutoff)));
