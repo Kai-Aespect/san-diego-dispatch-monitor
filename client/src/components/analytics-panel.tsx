@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
@@ -6,7 +6,7 @@ import {
 import { type IncidentListResponse } from "@shared/routes";
 import { differenceInMinutes, format, startOfDay, subDays, getHours, getDay } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown, Brain, Flame as FlameIcon } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown, Brain, Flame as FlameIcon, Maximize2, Minimize2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { DailyStat } from "@shared/schema";
 
@@ -124,6 +124,22 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   const [customUnit, setCustomUnit] = useState<Unit>("day");
   const [showCustom, setShowCustom] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
 
   function applyCustom(val: string, unit: Unit) {
     const n = parseFloat(val);
@@ -250,7 +266,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   // ── Hour of day ───────────────────────────────────────────────
   const hourlyData = useMemo(() => {
     const h = Array.from({ length: 24 }, (_, i) => ({
-      label: i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`,
+      label: i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`,
       Medical: 0, Fire: 0, Police: 0, Traffic: 0, Other: 0, Major: 0, total: 0,
     }));
     for (const inc of ranged) {
@@ -414,7 +430,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
   }, [total, rangeMinutes, hourlyData, dowData, catCounts, incidents, ranged, majorInRange, now, forecastHours]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div ref={containerRef} className="flex flex-col h-full overflow-hidden" style={isFullscreen ? { background: 'var(--background)', padding: '0' } : {}}>
 
       {/* ── Header ── */}
       <div className="px-4 pt-3 pb-0 border-b border-white/5 shrink-0">
@@ -423,9 +439,19 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
             <span className="text-xs font-semibold text-foreground">Analytics</span>
             <span className="ml-2 text-[10px] text-muted-foreground/60 font-mono">{total} calls</span>
           </div>
-          <span className="text-[10px] font-mono text-primary/80 bg-primary/10 px-2 py-0.5 rounded-md">
-            {minutesToLabel(rangeMinutes)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-primary/80 bg-primary/10 px-2 py-0.5 rounded-md">
+              {minutesToLabel(rangeMinutes)}
+            </span>
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-white/5 transition-all"
+              data-testid="button-analytics-fullscreen"
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
         {/* Preset buttons */}

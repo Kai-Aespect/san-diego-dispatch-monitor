@@ -430,7 +430,7 @@ function CallListContent({
           <div className="bg-amber-500/8 border border-amber-500/15 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
             <AlertTriangle className="w-3 h-3 text-amber-400/70 shrink-0 mt-0.5" />
             <p className="text-[9px] text-amber-400/70 leading-relaxed">
-              Past calls are stored for <span className="font-bold">30 days</span> then removed. Analytics data is retained indefinitely as daily totals.
+              Past calls are stored for <span className="font-bold">3 days</span> then removed. Analytics data is retained indefinitely as daily totals.
             </p>
           </div>
         )}

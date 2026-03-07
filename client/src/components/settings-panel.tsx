@@ -73,7 +73,7 @@ export function SettingsPanel() {
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">About</h3>
         <div className="p-3 rounded-xl bg-accent/20 border border-white/5 text-xs text-muted-foreground space-y-1 font-mono">
           <div className="flex justify-between"><span>Data Source</span><span className="text-foreground">SD Fire/Police APIs</span></div>
-          <div className="flex justify-between"><span>Refresh Rate</span><span className="text-foreground">Every 5 seconds</span></div>
+          <div className="flex justify-between"><span>Refresh Rate</span><span className="text-foreground">Every 30 seconds</span></div>
           <div className="flex justify-between"><span>Map Engine</span><span className="text-foreground">Leaflet + OSM</span></div>
           <div className="flex justify-between"><span>Geocoding</span><span className="text-foreground">Nominatim</span></div>
         </div>

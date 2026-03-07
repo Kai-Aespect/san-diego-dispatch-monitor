@@ -2,12 +2,36 @@ import { format, differenceInMinutes } from "date-fns";
 import { type IncidentListResponse } from "@shared/routes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, AlertTriangle, Clock, StickyNote, CheckCircle2, Bookmark, BookmarkCheck } from "lucide-react";
+import { MapPin, AlertTriangle, Clock, StickyNote, CheckCircle2, Bookmark, BookmarkCheck, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { getCallDescription } from "@/lib/call-descriptions";
+
+interface HistoryEntry {
+  id: number;
+  incidentId: number;
+  changedAt: string;
+  source: string;
+  summary: string;
+  changes: Array<{ field: string; oldValue: string; newValue: string }>;
+}
+
+const SKIP_FIELDS = new Set(["lat", "lng", "acknowledged"]);
+
+function filterCardHistory(entries: HistoryEntry[]): HistoryEntry[] {
+  return entries.filter(entry => {
+    if (entry.source === "created" || entry.source === "init") return false;
+    if (entry.summary?.toLowerCase().includes("incident created")) return false;
+    if (entry.changes && entry.changes.length > 0) {
+      const allSkipped = entry.changes.every(c => SKIP_FIELDS.has(c.field));
+      if (allSkipped) return false;
+    }
+    return true;
+  });
+}
 
 interface IncidentCardProps {
   incident: IncidentListResponse[0];
@@ -39,6 +63,18 @@ const RESPONSE_LEVEL_COLORS: Record<string, string> = {
 export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: IncidentCardProps) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const { isBookmarked, toggleBookmark } = useBookmarks();
+
+  const { data: rawHistory = [] } = useQuery<HistoryEntry[]>({
+    queryKey: ["/api/incidents", incident.id, "history"],
+    queryFn: async () => {
+      const res = await fetch(`/api/incidents/${incident.id}/history`);
+      return res.json();
+    },
+    enabled: !!incident.hasHistory,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+  const displayHistory = filterCardHistory(rawHistory).slice(0, 3);
 
   const isFire = incident.agency.toLowerCase() === 'fire';
   const isMedical = incident.callTypeFamily === 'Medical';
@@ -216,6 +252,22 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
               >
                 {unit}
               </button>
+            ))}
+          </div>
+        )}
+
+        {/* Update history */}
+        {displayHistory.length > 0 && (
+          <div className="mt-2.5 pt-2.5 border-t space-y-1" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center gap-1 mb-1.5">
+              <History className="w-2.5 h-2.5 text-muted-foreground/30" />
+              <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/30">Updates</span>
+            </div>
+            {displayHistory.map(entry => (
+              <div key={entry.id} className="flex items-start gap-1.5 text-[10px] leading-snug">
+                <span className="font-mono text-muted-foreground/35 shrink-0 mt-px">{format(new Date(entry.changedAt), "HH:mm")}</span>
+                <span className="text-muted-foreground/65">{entry.summary}</span>
+              </div>
             ))}
           </div>
         )}
