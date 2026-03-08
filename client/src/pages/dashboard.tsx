@@ -91,9 +91,9 @@ function ResizeHandle({ onMouseDown, className }: { onMouseDown: (e: React.Mouse
       )}
     >
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-px h-full bg-white/10 group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
+        <div className="w-px h-full bg-border group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
       </div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-12 rounded-full bg-white/20 group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors shadow-sm" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-12 rounded-full bg-foreground/20 group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors shadow-sm" />
     </div>
   );
 }
@@ -240,7 +240,7 @@ export default function Dashboard() {
 
         {/* Left panel */}
         <div
-          className="flex flex-col h-full shrink-0 overflow-hidden border-r border-white/5 bg-[#141928]/40 backdrop-blur-xl"
+          className="flex flex-col h-full shrink-0 overflow-hidden border-r border-border bg-card/40 backdrop-blur-xl"
           style={{ width: leftResize.width }}
         >
           <CallListContent {...callListProps} />
@@ -261,7 +261,7 @@ export default function Dashboard() {
 
         {/* Right side panel */}
         <div
-          className="flex flex-col h-full shrink-0 overflow-hidden border-l border-white/5 bg-[#141928]/40 backdrop-blur-xl"
+          className="flex flex-col h-full shrink-0 overflow-hidden border-l border-border bg-card/40 backdrop-blur-xl"
           style={{ width: rightResize.width }}
         >
           <SidePanel
@@ -366,11 +366,11 @@ function CallListContent({
 }: CallListContentProps) {
   return (
     <>
-      <div className="p-3 space-y-2.5 z-10 shrink-0 border-b border-white/5 bg-[#141928]/40 backdrop-blur-md">
+      <div className="p-3 space-y-2.5 z-10 shrink-0 border-b border-border bg-card/40 backdrop-blur-md">
         <div className="flex items-center justify-between gap-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-            <TabsList className="grid w-full grid-cols-3 bg-white/5 border border-white/10">
-              <TabsTrigger value="all" className="text-xs font-semibold data-[state=active]:bg-white/10 transition-none">All</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 bg-muted/60 border border-border">
+              <TabsTrigger value="all" className="text-xs font-semibold data-[state=active]:bg-background transition-none">All</TabsTrigger>
               <TabsTrigger value="fire" className="text-xs font-semibold data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400 transition-none">Fire/Med</TabsTrigger>
               <TabsTrigger value="police" className="text-xs font-semibold data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400 transition-none">Police</TabsTrigger>
             </TabsList>
@@ -378,7 +378,7 @@ function CallListContent({
           <Button
             variant="outline"
             size="sm"
-            className={cn("h-9 w-9 p-0 border-white/10 shrink-0", showArchived ? "bg-primary/20 text-primary" : "bg-black/40 text-muted-foreground")}
+            className={cn("h-9 w-9 p-0 border-border shrink-0", showArchived ? "bg-primary/20 text-primary" : "bg-muted/60 text-muted-foreground")}
             onClick={() => setShowArchived(!showArchived)}
             title={showArchived ? "Show Active Calls" : "Show Completed Archive"}
             data-testid="button-toggle-archive"
@@ -389,10 +389,10 @@ function CallListContent({
 
         <div className="flex items-center gap-2">
           <Select value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)}>
-            <SelectTrigger className="flex-1 h-8 text-xs bg-white/5 border-white/10" data-testid="filter-select">
+            <SelectTrigger className="flex-1 h-8 text-xs bg-muted/60 border-border" data-testid="filter-select">
               <SelectValue placeholder="Filter..." />
             </SelectTrigger>
-            <SelectContent className="bg-card border-white/10">
+            <SelectContent className="bg-card border-border">
               <SelectItem value="all">All Incidents</SelectItem>
               <SelectItem value="new_updated">New / Updated</SelectItem>
               <SelectItem value="major">Major Incidents</SelectItem>

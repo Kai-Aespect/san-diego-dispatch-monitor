@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useAdminAuth, lockAdmin, checkPin } from "@/hooks/use-admin-auth";
+import { useAdminAuth, lockAdmin, checkPin, getCustomPinList, addCustomPin, removeCustomPin } from "@/hooks/use-admin-auth";
 import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import { type IncidentListResponse, type AdminCardListResponse } from "@shared/routes";
 import {
@@ -121,7 +121,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
   const { isAdmin } = useAdminAuth();
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
-  const [section, setSection] = useState<"board" | "calls" | "keys">("board");
+  const [section, setSection] = useState<"board" | "calls" | "keys" | "security">("board");
 
   const handlePinSubmit = () => {
     if (checkPin(pinInput)) {
@@ -136,7 +136,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
   if (!isAdmin) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center gap-2">
+        <div className="px-4 pt-4 pb-3 border-b border-border flex items-center gap-2">
           <Lock className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-semibold text-muted-foreground">Admin Panel</span>
         </div>
@@ -151,11 +151,11 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handlePinSubmit()}
-                className={cn("h-9 text-center text-xl font-mono tracking-widest bg-accent/20 border-white/10", pinError && "border-destructive animate-pulse")}
+                className={cn("h-9 text-center text-xl font-mono tracking-widest bg-muted/60 border-border", pinError && "border-destructive animate-pulse")}
                 data-testid="input-admin-pin"
                 autoFocus
               />
-              <Button size="sm" variant="outline" className="h-9 border-white/10" onClick={handlePinSubmit}>
+              <Button size="sm" variant="outline" className="h-9 border-border" onClick={handlePinSubmit}>
                 <Unlock className="w-4 h-4" />
               </Button>
             </div>
@@ -168,7 +168,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center justify-between">
+      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-emerald-400" />
           <span className="text-xs font-semibold text-muted-foreground">Admin Panel</span>
@@ -180,7 +180,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
       </div>
 
       {/* Section tabs */}
-      <div className="flex border-b border-white/5 shrink-0">
+      <div className="flex border-b border-border shrink-0">
         <button
           onClick={() => setSection("board")}
           className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "board" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
@@ -197,7 +197,13 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
           onClick={() => setSection("keys")}
           className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "keys" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
         >
-          Manage Keys
+          Card Keys
+        </button>
+        <button
+          onClick={() => setSection("security")}
+          className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "security" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
+        >
+          Access
         </button>
       </div>
 
@@ -205,8 +211,10 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
         <AdminBoardSection />
       ) : section === "calls" ? (
         <ClearCallsSection incidents={incidents} />
-      ) : (
+      ) : section === "keys" ? (
         <AdminKeysSection />
+      ) : (
+        <AdminSecuritySection />
       )}
     </div>
   );
@@ -620,6 +628,75 @@ function AdminKeysSection() {
             {keys.length === 0 && (
               <div className="text-center py-8 text-muted-foreground/30 text-xs italic border border-dashed border-white/10 rounded-lg">
                 No custom keys configured yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminSecuritySection() {
+  const [pins, setPins] = useState<string[]>(() => getCustomPinList());
+  const [newPinInput, setNewPinInput] = useState("");
+  const [addError, setAddError] = useState("");
+
+  const handleAdd = () => {
+    if (newPinInput.length < 4) { setAddError("PIN must be at least 4 digits"); return; }
+    if (newPinInput === "3232") { setAddError("Cannot re-add the main PIN"); return; }
+    if (pins.includes(newPinInput)) { setAddError("PIN already exists"); return; }
+    addCustomPin(newPinInput);
+    setPins(getCustomPinList());
+    setNewPinInput("");
+    setAddError("");
+  };
+
+  const handleRemove = (pin: string) => {
+    removeCustomPin(pin);
+    setPins(getCustomPinList());
+  };
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+      <div className="p-4 space-y-4">
+        <div className="bg-muted/30 border border-border rounded-xl p-3 space-y-1">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Main Admin PIN</p>
+          <p className="text-xs font-mono text-foreground">3232 <span className="text-muted-foreground">(permanent)</span></p>
+        </div>
+
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-3">
+          <h4 className="text-xs font-bold text-primary uppercase">Add Access PIN</h4>
+          <div className="flex gap-2">
+            <Input
+              value={newPinInput}
+              onChange={e => { setNewPinInput(e.target.value.replace(/\D/g, "")); setAddError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleAdd()}
+              maxLength={8}
+              placeholder="Enter PIN..."
+              className="h-8 text-xs font-mono flex-1"
+            />
+            <Button onClick={handleAdd} disabled={newPinInput.length < 4} className="h-8 text-xs px-3">
+              <Plus className="w-3 h-3 mr-1" /> Add
+            </Button>
+          </div>
+          {addError && <p className="text-[10px] text-destructive font-mono">{addError}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Custom Access PINs</h4>
+          <div className="space-y-1.5">
+            {pins.map(pin => (
+              <div key={pin} className="bg-card border border-border rounded-lg p-2.5 flex items-center justify-between group">
+                <p className="text-xs font-mono text-foreground">•••• {pin.slice(-2)}</p>
+                <button onClick={() => handleRemove(pin)} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            {pins.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground/30 text-xs italic border border-dashed border-border rounded-lg">
+                No custom PINs added yet.
               </div>
             )}
           </div>

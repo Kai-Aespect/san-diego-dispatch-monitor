@@ -256,8 +256,8 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
     <div className="flex flex-col h-full relative overflow-hidden">
       {/* ── Unit History Overlay ── */}
       {selectedUnitId && effectiveUnit && (
-        <div className="absolute inset-0 z-20 bg-[#0a0c14] dark:bg-[#0a0c14] flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
-          <div className="px-3 py-3 border-b border-white/10 flex items-center justify-between shrink-0 bg-background/80 backdrop-blur-md">
+        <div className="absolute inset-0 z-20 bg-background flex flex-col animate-in fade-in slide-in-from-right-4 duration-200">
+          <div className="px-3 py-3 border-b border-border flex items-center justify-between shrink-0 bg-background/80 backdrop-blur-md">
             <div className="flex items-center gap-2">
               <div className={cn("p-1 rounded-md bg-white/5", UNIT_CATEGORY_COLORS[effectiveUnit.category].text)}>
                 {(() => {

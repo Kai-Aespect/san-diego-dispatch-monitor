@@ -45,7 +45,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
     badge?: number;
     proOnly?: boolean;
   }> = [
-    { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length },
+    { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length, proOnly: true },
     { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "Notes",   testId: "tab-notes",      proOnly: true },
     { id: "units",     icon: <Radio className="w-4 h-4" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount, proOnly: true },
     { id: "analytics", icon: <BarChart2 className="w-4 h-4" />,  label: "Stats",   testId: "tab-analytics",  proOnly: true },
@@ -60,7 +60,13 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
 
       {/* ── Content area ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {activeTab === "bookmarks" && <BookmarksPanel incidents={incidents} onSelectIncident={onSelectIncident} />}
+        {activeTab === "bookmarks" && (
+          isSubscribed
+            ? <BookmarksPanel incidents={incidents} onSelectIncident={onSelectIncident} />
+            : <div className="flex-1 flex flex-col overflow-hidden">
+                <SubscribeWall feature="Track Incidents" />
+              </div>
+        )}
 
         {activeTab === "notes" && (
           isSubscribed
@@ -105,7 +111,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
       </div>
 
       {/* ── Vertical nav — RIGHT side ── */}
-      <nav className="flex flex-col shrink-0 w-[58px] border-l border-white/5 bg-[#0a0c18]/70 py-2 gap-0.5 overflow-y-auto">
+      <nav className="flex flex-col shrink-0 w-[58px] border-l border-border bg-background/70 py-2 gap-0.5 overflow-y-auto">
         {TABS.map(tab => {
           const active = activeTab === tab.id;
           const adminActive = tab.id === "admin" && isAdmin;
@@ -143,7 +149,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
               )}
 
               {adminActive && !active && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0a0c18]" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-background" />
               )}
 
               {needsPro && !active && (

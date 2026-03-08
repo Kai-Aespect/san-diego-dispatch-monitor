@@ -91,7 +91,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         preload="none"
       />
 
-      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-[#0a0c14]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="flex items-center gap-2">
@@ -115,8 +115,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                 placeholder="Search units, address, type..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 w-full h-9 rounded-xl border-white/10 focus-visible:ring-primary/40 focus-visible:ring-2"
-                style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(20px)' }}
+                className="pl-9 w-full h-9 rounded-xl bg-muted/60 border-border focus-visible:ring-primary/40 focus-visible:ring-2"
                 data-testid="input-search"
               />
             </div>
@@ -142,7 +141,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
               size="sm"
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending}
-              className="border-white/10 bg-black/20 hover:bg-white/5"
+              className="border-border bg-muted/40 hover:bg-muted"
             >
               <RefreshCcw className={`w-4 h-4 mr-2 ${syncMutation.isPending ? 'animate-spin text-primary' : ''}`} />
               {syncMutation.isPending ? 'Syncing...' : 'Sync'}
@@ -177,7 +176,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         {/* Inline audio player bar */}
         {playerOpen && (
           <div className="mt-3 max-w-screen-2xl mx-auto">
-            <div className="rounded-2xl overflow-hidden bg-[#141928]/60 backdrop-blur-xl border border-white/10 shadow-2xl">
+            <div className="rounded-2xl overflow-hidden bg-card/80 backdrop-blur-xl border border-border shadow-2xl">
               <div className="flex items-center gap-4 px-4 py-3">
 
                 {/* Play/Pause button */}
