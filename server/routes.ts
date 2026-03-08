@@ -140,6 +140,7 @@ export async function registerRoutes(
         success_url: `${origin}/subscribe/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/subscribe/cancel`,
         metadata: { userId: String(user.id) },
+        allow_promotion_codes: true,
       });
 
       res.json({ url: session.url });
