@@ -1,9 +1,10 @@
 import { db } from "./db";
 import {
-  incidents, incidentHistory, adminCards, polls, pollVotes, dailyStats, unitNotes, authKeys,
+  incidents, incidentHistory, adminCards, polls, pollVotes, dailyStats, unitNotes, authKeys, users, userNotes,
   type Incident, type InsertIncident, type IncidentHistory,
   type AdminCard, type InsertAdminCard, type Poll, type InsertPoll, type PollVote,
   type DailyStat, type UnitNote, type AuthKey, type InsertAuthKey,
+  type User, type UserNote,
 } from "@shared/schema";
 import { eq, desc, and, notInArray, inArray, sql, lt, asc, gte } from "drizzle-orm";
 import { format, subDays } from "date-fns";
@@ -47,6 +48,14 @@ export interface IStorage {
   getDailyStats(): Promise<DailyStat[]>;
   aggregateIncidentsIntoDailyStats(incList: Incident[]): Promise<void>;
   pruneOldIncidents(): Promise<void>;
+
+  // Users
+  createUser(data: { email: string; passwordHash: string; name: string }): Promise<User>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | undefined>;
+  updateUserSubscription(userId: number, data: { subscriptionStatus?: string; subscriptionId?: string | null; stripeCustomerId?: string }): Promise<User>;
+  getUserNotes(userId: number): Promise<UserNote | undefined>;
+  upsertUserNotes(userId: number, content: string): Promise<UserNote>;
 }
 
 const TRACKED_FIELDS: Array<keyof InsertIncident> = ['units', 'status', 'callType', 'isMajor', 'location'];
@@ -324,6 +333,46 @@ export class DatabaseStorage implements IStorage {
       return updated;
     }
     const [created] = await db.insert(unitNotes).values({ unitId, content }).returning();
+    return created;
+  }
+
+  // ── Users ──────────────────────────────────────────────────
+  async createUser(data: { email: string; passwordHash: string; name: string }): Promise<User> {
+    const [user] = await db.insert(users).values(data).returning();
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async updateUserSubscription(userId: number, data: {
+    subscriptionStatus?: string;
+    subscriptionId?: string | null;
+    stripeCustomerId?: string;
+  }): Promise<User> {
+    const [updated] = await db.update(users).set(data).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async getUserNotes(userId: number): Promise<UserNote | undefined> {
+    const [note] = await db.select().from(userNotes).where(eq(userNotes.userId, userId));
+    return note;
+  }
+
+  async upsertUserNotes(userId: number, content: string): Promise<UserNote> {
+    const existing = await this.getUserNotes(userId);
+    if (existing) {
+      const [updated] = await db.update(userNotes).set({ content, updatedAt: new Date() }).where(eq(userNotes.userId, userId)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(userNotes).values({ userId, content }).returning();
     return created;
   }
 

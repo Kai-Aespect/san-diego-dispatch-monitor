@@ -5,6 +5,7 @@ export type Theme = "dark" | "light";
 interface Settings {
   theme: Theme;
   volumeEnabled: boolean;
+  fastRefresh: boolean;
 }
 
 const STORAGE_KEY = "sd_dispatch_settings";
@@ -12,9 +13,9 @@ const STORAGE_KEY = "sd_dispatch_settings";
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...{ theme: "dark", volumeEnabled: false }, ...JSON.parse(raw) };
+    if (raw) return { theme: "dark", volumeEnabled: false, fastRefresh: false, ...JSON.parse(raw) };
   } catch {}
-  return { theme: "dark", volumeEnabled: false };
+  return { theme: "dark", volumeEnabled: false, fastRefresh: false };
 }
 
 function saveSettings(s: Settings) {
@@ -42,7 +43,6 @@ function broadcast(s: Settings) {
   listeners.forEach(fn => fn(s));
 }
 
-// Apply theme immediately on module load
 applyTheme(globalSettings.theme);
 
 export function useSettings() {
@@ -65,5 +65,9 @@ export function useSettings() {
     broadcast({ ...globalSettings, volumeEnabled });
   }, []);
 
-  return { settings, setTheme, setVolumeEnabled };
+  const setFastRefresh = useCallback((fastRefresh: boolean) => {
+    broadcast({ ...globalSettings, fastRefresh });
+  }, []);
+
+  return { settings, setTheme, setVolumeEnabled, setFastRefresh };
 }

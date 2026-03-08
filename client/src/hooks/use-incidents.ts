@@ -12,7 +12,7 @@ function parseWithLogging<T>(schema: z.ZodSchema<T>, data: unknown, label: strin
   return result.data;
 }
 
-export function useIncidents() {
+export function useIncidents(refetchInterval: number = 60000) {
   return useQuery({
     queryKey: [api.incidents.list.path],
     queryFn: async () => {
@@ -21,7 +21,7 @@ export function useIncidents() {
       const data = await res.json();
       return parseWithLogging(api.incidents.list.responses[200], data, "incidents.list");
     },
-    refetchInterval: 30000,
+    refetchInterval,
     refetchOnWindowFocus: true,
   });
 }

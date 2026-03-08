@@ -2,15 +2,17 @@ import { useState } from "react";
 import { type IncidentListResponse } from "@shared/routes";
 import { Bookmark, StickyNote, Shield, Settings, Lock, Radio, BookOpen, BarChart2 } from "lucide-react";
 import { BookmarksPanel } from "./bookmarks-panel";
-import { LocalNotes } from "./local-notes";
+import { PersonalNotes } from "./personal-notes";
 import { InfoBoard } from "./info-board";
 import { AdminPanel } from "./admin-panel";
 import { SettingsPanel } from "./settings-panel";
 import { UnitsPanel } from "./units-panel";
 import { ReferencePanel } from "./reference-panel";
 import { AnalyticsPanel } from "./analytics-panel";
+import { SubscribeWall } from "./subscribe-wall";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
 export type PanelTab = "bookmarks" | "notes" | "units" | "analytics" | "info" | "reference" | "admin" | "settings";
@@ -29,6 +31,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
   const setActiveTab = setControlledTab ?? setInternalTab;
   const { bookmarkedIds } = useBookmarks();
   const { isAdmin } = useAdminAuth();
+  const { isSubscribed } = useAuth();
 
   const activeUnitCount = incidents
     .filter(i => i.active)
@@ -40,11 +43,12 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
     label: string;
     testId: string;
     badge?: number;
+    proOnly?: boolean;
   }> = [
     { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length },
-    { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "Notes",   testId: "tab-notes" },
-    { id: "units",     icon: <Radio className="w-4 h-4" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount },
-    { id: "analytics", icon: <BarChart2 className="w-4 h-4" />,  label: "Stats",   testId: "tab-analytics" },
+    { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "Notes",   testId: "tab-notes",      proOnly: true },
+    { id: "units",     icon: <Radio className="w-4 h-4" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount, proOnly: true },
+    { id: "analytics", icon: <BarChart2 className="w-4 h-4" />,  label: "Stats",   testId: "tab-analytics",  proOnly: true },
     { id: "info",      icon: <Shield className="w-4 h-4" />,     label: "Info",    testId: "tab-info" },
     { id: "reference", icon: <BookOpen className="w-4 h-4" />,   label: "Ref",     testId: "tab-reference" },
     { id: "admin",     icon: <Lock className="w-4 h-4" />,       label: "Admin",   testId: "tab-admin" },
@@ -57,9 +61,31 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
       {/* ── Content area ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {activeTab === "bookmarks" && <BookmarksPanel incidents={incidents} onSelectIncident={onSelectIncident} />}
-        {activeTab === "notes"     && <LocalNotes incidents={incidents} />}
-        {activeTab === "units"     && <UnitsPanel incidents={incidents} onSelectIncident={onSelectIncident} focusUnitId={focusUnitId} />}
-        {activeTab === "analytics" && <AnalyticsPanel incidents={incidents} />}
+
+        {activeTab === "notes" && (
+          isSubscribed
+            ? <PersonalNotes />
+            : <div className="flex-1 flex flex-col overflow-hidden">
+                <SubscribeWall feature="Personal Notes" />
+              </div>
+        )}
+
+        {activeTab === "units" && (
+          isSubscribed
+            ? <UnitsPanel incidents={incidents} onSelectIncident={onSelectIncident} focusUnitId={focusUnitId} />
+            : <div className="flex-1 flex flex-col overflow-hidden">
+                <SubscribeWall feature="Units Roster" />
+              </div>
+        )}
+
+        {activeTab === "analytics" && (
+          isSubscribed
+            ? <AnalyticsPanel incidents={incidents} />
+            : <div className="flex-1 flex flex-col overflow-hidden">
+                <SubscribeWall feature="Stats & Analytics" />
+              </div>
+        )}
+
         {activeTab === "info" && (
           <div className="flex flex-col h-full">
             <div className="px-3 pt-3 pb-2.5 border-b border-white/5 flex items-center gap-2 shrink-0">
@@ -83,6 +109,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
         {TABS.map(tab => {
           const active = activeTab === tab.id;
           const adminActive = tab.id === "admin" && isAdmin;
+          const needsPro = tab.proOnly && !isSubscribed;
           return (
             <button
               key={tab.id}
@@ -97,10 +124,11 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
                   ? "bg-primary/15 text-primary"
                   : adminActive
                   ? "text-emerald-400 hover:bg-white/5"
+                  : needsPro
+                  ? "text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-white/5"
                   : "text-muted-foreground/50 hover:text-foreground/80 hover:bg-white/5"
               )}
             >
-              {/* Active right-edge bar */}
               {active && (
                 <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-6 rounded-l-full bg-primary" />
               )}
@@ -108,16 +136,18 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
               {tab.icon}
               <span className="w-full text-center px-0.5 truncate">{tab.label}</span>
 
-              {/* Badge */}
               {tab.badge !== undefined && tab.badge > 0 && (
                 <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-primary-foreground text-[8px] font-bold flex items-center justify-center leading-none">
                   {tab.badge > 99 ? "99" : tab.badge}
                 </span>
               )}
 
-              {/* Admin online dot */}
               {adminActive && !active && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0a0c18]" />
+              )}
+
+              {needsPro && !active && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-primary/40" />
               )}
             </button>
           );

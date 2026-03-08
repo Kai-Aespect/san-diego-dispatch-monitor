@@ -13,7 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useBookmarks } from "@/hooks/use-bookmarks";
-import { useKeyAuth } from "@/hooks/use-key-auth";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 interface IncidentDrawerProps {
   incident: IncidentListResponse[0] | null;
@@ -48,14 +49,13 @@ const SYSTEM_ONLY_FIELDS = new Set(["lat", "lng"]);
 
 export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawerProps) {
   const { toast } = useToast();
-  const { isKeyUnlocked: unlocked, keyCheckPinAsync: checkPinAsync, keyGetStoredPin: getStoredPin } = useKeyAuth();
+  const { isSubscribed } = useAuth();
+  const [, setLocation] = useLocation();
   const [notes, setNotes] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState("");
   const { isBookmarked, toggleBookmark } = useBookmarks();
 
   const defaultTags = ["En-Route", "On-Scene", "Code 4", "Traffic Control", "Medical", "Fire", "Staged"];
@@ -85,10 +85,10 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   const bookmarked = isBookmarked(incident.id);
 
   const handleSave = async () => {
-    if (isSaving || !unlocked) return;
+    if (isSaving || !isSubscribed) return;
     setIsSaving(true);
     try {
-      const res = await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags, pin: getStoredPin() });
+      const res = await apiRequest("PATCH", `/api/incidents/${incident.id}`, { notes, tags });
       if (res.ok) {
         queryClient.setQueryData(["/api/incidents"], (old: any) =>
           old?.map((i: any) => i.id === incident.id ? { ...i, notes, tags, lastUpdated: new Date() } : i)
@@ -96,7 +96,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
         refetchHistory();
         toast({ title: "Saved", description: "Changes saved successfully." });
       } else {
-        setPinError("Save failed — PIN may have expired.");
+        toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
       }
     } catch (e) {
       console.error("Save failed", e);
@@ -106,7 +106,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   };
 
   const addTag = (tag: string) => {
-    if (!unlocked) { toast({ title: "Locked", description: "Unlock with your Key PIN to edit." }); return; }
+    if (!isSubscribed) { toast({ title: "Pro Feature", description: "Upgrade to edit tags." }); return; }
     const cleanTag = tag.trim();
     if (cleanTag && !tags.includes(cleanTag)) {
       setTags([...tags, cleanTag]);
@@ -115,7 +115,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
   };
 
   const removeTag = (tag: string) => {
-    if (!unlocked) { toast({ title: "Locked", description: "Unlock with your Key PIN to edit." }); return; }
+    if (!isSubscribed) { toast({ title: "Pro Feature", description: "Upgrade to edit tags." }); return; }
     setTags(tags.filter(t => t !== tag));
   };
 
@@ -268,53 +268,27 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
             </TabsContent>
 
             <TabsContent value="notes" className="p-6 pt-4 space-y-4 m-0">
-              {!unlocked && (
-                <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-amber-400">
+              {!isSubscribed && (
+                <div className="bg-primary/5 border border-primary/20 p-3 rounded-lg flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-primary">
                     <Lock className="w-4 h-4" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider">Editing Locked</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Pro Feature</span>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        maxLength={6}
-                        value={pin}
-                        onChange={e => { setPin(e.target.value); setPinError(""); }}
-                        placeholder="PIN"
-                        className={cn(
-                          "w-16 bg-black/20 border rounded px-2 py-1 text-xs font-mono",
-                          pinError ? "border-red-500/60" : "border-white/10"
-                        )}
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                        onClick={async () => {
-                          setPinError("");
-                          const ok = await checkPinAsync(pin);
-                          if (!ok) setPinError("Invalid PIN — try again.");
-                          else setPin("");
-                        }}
-                      >
-                        Unlock
-                      </Button>
-                    </div>
-                    {pinError && (
-                      <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                        {pinError}
-                      </p>
-                    )}
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] border-primary/30 text-primary hover:bg-primary/20"
+                    onClick={() => setLocation("/?tab=notes")}
+                  >
+                    Upgrade
+                  </Button>
                 </div>
               )}
 
-              <div className={cn(!unlocked && "opacity-50 pointer-events-none")}>
+              <div className={cn(!isSubscribed && "opacity-50 pointer-events-none")}>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Incident Notes</label>
-                  {unlocked && (
+                  {isSubscribed && (
                     <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSave} disabled={isSaving}>
                       <Save className="w-3 h-3 mr-1" /> {isSaving ? "Saving..." : "Save Changes"}
                     </Button>
@@ -328,7 +302,7 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
                 />
               </div>
 
-              <div className={cn(!unlocked && "opacity-50 pointer-events-none")}>
+              <div className={cn(!isSubscribed && "opacity-50 pointer-events-none")}>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Quick Tags</label>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {defaultTags.map(tag => (

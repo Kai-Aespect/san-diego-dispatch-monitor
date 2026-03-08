@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useIncidents, useStatus } from "@/hooks/use-incidents";
 import { useSettings } from "@/hooks/use-settings";
+import { useAuth } from "@/hooks/use-auth";
 import { IncidentCard } from "@/components/incident-card";
 import { IncidentMap } from "@/components/incident-map";
 import { DashboardHeader } from "@/components/dashboard-header";
@@ -98,9 +99,11 @@ function ResizeHandle({ onMouseDown, className }: { onMouseDown: (e: React.Mouse
 }
 
 export default function Dashboard() {
-  const { data: incidents = [], isLoading } = useIncidents();
-  const { data: status } = useStatus();
+  const { isSubscribed } = useAuth();
   const { settings } = useSettings();
+  const refetchInterval = settings.fastRefresh && isSubscribed ? 30000 : 60000;
+  const { data: incidents = [], isLoading } = useIncidents(refetchInterval);
+  const { data: status } = useStatus();
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");

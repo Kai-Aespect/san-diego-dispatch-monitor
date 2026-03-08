@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type IncidentListResponse } from "@shared/routes";
-import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X, Unlock } from "lucide-react";
+import { Search, Radio, Flame, Activity, Shield, Truck, Droplets, AlertTriangle, Wrench, Zap, Wind, History, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useKeyAuth } from "@/hooks/use-key-auth";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 interface UnitsPanelProps {
   incidents: IncidentListResponse;
@@ -140,36 +141,25 @@ const SD_UNITS: UnitDefinition[] = [
 ];
 
 function UnitPublicNotes({ unitId }: { unitId: string }) {
-  const { isKeyUnlocked: unlocked, keyCheckPinAsync: checkPinAsync, keyGetStoredPin: getStoredPin } = useKeyAuth();
+  const { isSubscribed } = useAuth();
+  const [, setLocation] = useLocation();
   const { data: note, refetch } = useQuery<{ content: string }>({ queryKey: [`/api/units/${unitId}/note`] });
   const [isSaving, setIsSaving] = useState(false);
   const [content, setContent] = useState("");
-  const [showPinInput, setShowPinInput] = useState(false);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState("");
 
   useEffect(() => {
     if (note) setContent(note.content);
   }, [note]);
 
-  useEffect(() => {
-    if (unlocked) setShowPinInput(false);
-  }, [unlocked]);
-
   const handleSave = async () => {
     setIsSaving(true);
-    setPinError("");
     try {
       const res = await fetch(`/api/units/${unitId}/note`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, pin: getStoredPin() }),
+        body: JSON.stringify({ content }),
       });
-      if (res.ok) {
-        refetch();
-      } else {
-        setPinError("Save failed — PIN may have expired.");
-      }
+      if (res.ok) refetch();
     } catch (e) {
       console.error(e);
     } finally {
@@ -180,7 +170,7 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Unit Notes & Location Info</p>
-      {unlocked ? (
+      {isSubscribed ? (
         <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2">
           <textarea
             value={content}
@@ -188,21 +178,13 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
             className="w-full bg-black/20 border border-white/10 rounded p-2 text-xs min-h-[80px] text-foreground focus:outline-none"
             placeholder="Enter unit notes, equipment details, or base location..."
           />
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex-1 bg-primary/20 text-primary border border-primary/30 rounded text-[10px] font-bold py-1 hover:bg-primary/30"
-            >
-              {isSaving ? "SAVING..." : "SAVE NOTES"}
-            </button>
-          </div>
-          {pinError && (
-            <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-              {pinError}
-            </p>
-          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="w-full bg-primary/20 text-primary border border-primary/30 rounded text-[10px] font-bold py-1 hover:bg-primary/30"
+          >
+            {isSaving ? "SAVING..." : "SAVE NOTES"}
+          </button>
         </div>
       ) : (
         <div className="bg-white/5 p-3 rounded-lg border border-white/5 space-y-2">
@@ -211,57 +193,12 @@ function UnitPublicNotes({ unitId }: { unitId: string }) {
           ) : (
             <p className="text-[10px] text-muted-foreground/40 italic">No notes for this unit.</p>
           )}
-          {!showPinInput ? (
-            <button
-              onClick={() => setShowPinInput(true)}
-              className="text-[10px] text-primary hover:underline flex items-center gap-1"
-            >
-              <Unlock className="w-3 h-3" /> Edit Notes (Requires Key)
-            </button>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  maxLength={6}
-                  value={pin}
-                  autoFocus
-                  onChange={(e) => { setPin(e.target.value); setPinError(""); }}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter") {
-                      const ok = await checkPinAsync(pin);
-                      if (!ok) setPinError("Invalid PIN — try again.");
-                      else setPin("");
-                    }
-                  }}
-                  className={cn(
-                    "w-24 bg-black/20 border rounded px-2 py-1 text-xs font-mono",
-                    pinError ? "border-red-500/60" : "border-white/10"
-                  )}
-                  placeholder="Key PIN"
-                />
-                <button
-                  onClick={async () => {
-                    const ok = await checkPinAsync(pin);
-                    if (!ok) setPinError("Invalid PIN — try again.");
-                    else setPin("");
-                  }}
-                  className="bg-primary/20 text-primary border border-primary/30 rounded text-[10px] font-bold px-2 hover:bg-primary/30"
-                >
-                  Unlock
-                </button>
-                <button onClick={() => { setShowPinInput(false); setPin(""); setPinError(""); }} className="px-1 text-muted-foreground hover:text-foreground">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-              {pinError && (
-                <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                  {pinError}
-                </p>
-              )}
-            </div>
-          )}
+          <button
+            onClick={() => setLocation("/subscribe")}
+            className="text-[10px] text-primary hover:underline flex items-center gap-1"
+          >
+            <Zap className="w-3 h-3" /> Upgrade to Pro to edit notes
+          </button>
         </div>
       )}
     </div>

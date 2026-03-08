@@ -2,21 +2,30 @@
 
 ## Overview
 
-SD Dispatch Live is a real-time emergency dispatch monitoring dashboard for San Diego, CA. It scrapes live fire and police dispatch data from San Diego city web portals, geocodes incident locations, and presents them on an interactive dashboard with a map view, incident list, filtering, notes/tagging, bookmarks, local personal notes, an admin info board, and audio notifications.
+SD Dispatch Live is a real-time emergency dispatch monitoring dashboard for San Diego, CA. It scrapes live fire and police dispatch data from San Diego city web portals, geocodes incident locations, and presents them on an interactive dashboard with a map view, incident list, filtering, notes/tagging, bookmarks, personal cloud notes, an admin info board, and audio notifications.
 
 Key capabilities:
 - Scrapes fire incidents from the SD Fire Dispatch JSON API (`SDFireDispatch/api/v1/Incidents`)
 - Scrapes police incidents from the SDPD Online dispatch portal (HTML scraping via cheerio); police page times are in Pacific time (America/Los_Angeles) and are correctly offset to UTC via `parsePacificTime()` in scraper.ts
 - Geocodes addresses using the Nominatim (OpenStreetMap) API with rate limiting and in-memory caching
 - Stores incidents and their change history in PostgreSQL via Drizzle ORM
-- Polls and syncs data every 5 seconds on the server
-- Frontend auto-refreshes every 5 seconds via TanStack Query
-- Supports user annotations: notes, tags, and per-incident acknowledgment
-- Local notes (localStorage): personal per-browser sticky notes, can be linked to active calls
+- Polls and syncs data every 60 seconds on the server
+- Frontend auto-refreshes every 60s (free) or 30s (Pro) via TanStack Query
+- Supports user annotations: notes, tags, and per-incident acknowledgment (Pro only)
+- Personal cloud notes (Pro): per-user notes saved to DB via API
 - Bookmarks (localStorage): track specific calls; they appear in the right side panel
-- Admin info board: PIN-protected (3232) editable cards shown to all users; default PIN is 3232
-- Settings: light/dark theme toggle, audio alert on/off
+- Admin info board: admin PIN 3232; locked cards require Pro subscription
+- Settings: light/dark theme toggle, audio alert on/off, fast refresh toggle (Pro)
 - 3-tone ascending beep for new/updated incidents
+
+### Authentication & Subscriptions
+- All visitors must create an account to access the dashboard
+- Free accounts get: incident list, map, bookmarks, info board (non-locked), reference
+- Dispatch Pro subscribers get: Personal Notes, call/unit note editing, Units panel, Stats panel, fast refresh, locked info board cards
+- Pricing: Weekly $1.49, Monthly $4.99, Yearly $49 (Stripe)
+- Stripe product ID: `prod_U6kOFOZBFHCphe`
+- Stripe price IDs: weekly `price_1T8WtePyfpGf4shhI7P9UJTq`, monthly `price_1T8WthPyfpGf4shh0EoW3INa`, yearly `price_1T8WtjPyfpGf4shhkt651jp6`
+- Admin PIN: 3232 (for /admin panel only)
 
 ---
 
