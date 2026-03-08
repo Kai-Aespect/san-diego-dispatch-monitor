@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   Lock, Unlock, Plus, Trash2, Edit3, Save, X, GripVertical,
-  Link, FileText, Shield, BarChart2, CheckSquare, Square, Archive, Pin, PinOff,
-  LockKeyhole, LockKeyholeOpen
+  Link, FileText, Shield, BarChart2, CheckSquare, Square, Archive, Pin, PinOff, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,15 +88,15 @@ function SortableCard({
            <FileText className="w-3 h-3 shrink-0" />}
           <span className="truncate">{card.title}</span>
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            {card.keyLocked && <span className="text-[9px] text-amber-400/70">KEY</span>}
+            {card.keyLocked && <span className="text-[9px] text-primary/70">PRO</span>}
             {card.pinned && <span className="text-[9px] opacity-50">PINNED</span>}
           </div>
         </div>
         {card.content && <p className="text-[11px] text-foreground/60 truncate">{card.content}</p>}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button onClick={onToggleKeyLock} title={card.keyLocked ? "Remove key lock" : "Require key to view"} className="p-0.5 text-muted-foreground hover:text-amber-400 transition-colors">
-          {card.keyLocked ? <LockKeyhole className="w-3 h-3 text-amber-400" /> : <LockKeyholeOpen className="w-3 h-3" />}
+        <button onClick={onToggleKeyLock} title={card.keyLocked ? "Remove Pro restriction" : "Restrict to Pro subscribers"} className="p-0.5 text-muted-foreground hover:text-primary transition-colors">
+          <Zap className={cn("w-3 h-3", card.keyLocked && "text-primary")} />
         </button>
         <button onClick={onTogglePin} title={card.pinned ? "Unpin" : "Pin"} className="p-0.5 text-muted-foreground hover:text-amber-400 transition-colors">
           {card.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
@@ -121,7 +120,7 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
   const { isAdmin } = useAdminAuth();
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
-  const [section, setSection] = useState<"board" | "calls" | "keys" | "security">("board");
+  const [section, setSection] = useState<"board" | "calls" | "security">("board");
 
   const handlePinSubmit = () => {
     if (checkPin(pinInput)) {
@@ -194,12 +193,6 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
           Clear Calls
         </button>
         <button
-          onClick={() => setSection("keys")}
-          className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "keys" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
-        >
-          Card Keys
-        </button>
-        <button
           onClick={() => setSection("security")}
           className={cn("flex-1 py-2 text-xs font-semibold transition-colors", section === "security" ? "text-primary border-b border-primary" : "text-muted-foreground hover:text-foreground")}
         >
@@ -211,8 +204,6 @@ export function AdminPanel({ incidents }: AdminPanelProps) {
         <AdminBoardSection />
       ) : section === "calls" ? (
         <ClearCallsSection incidents={incidents} />
-      ) : section === "keys" ? (
-        <AdminKeysSection />
       ) : (
         <AdminSecuritySection />
       )}
@@ -392,12 +383,12 @@ function AdminBoardSection() {
               className={cn(
                 "flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-all",
                 newCard.keyLocked
-                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                  : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
               )}
             >
-              {newCard.keyLocked ? <LockKeyhole className="w-3 h-3" /> : <LockKeyholeOpen className="w-3 h-3" />}
-              <span>{newCard.keyLocked ? "Key Locked" : "Public"}</span>
+              <Zap className="w-3 h-3" />
+              <span>{newCard.keyLocked ? "Pro Only" : "Public"}</span>
             </button>
           </div>
           <div className="flex gap-2">
@@ -546,12 +537,12 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
           className={cn(
             "flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-all",
             keyLocked
-              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-              : "border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
           )}
         >
-          {keyLocked ? <LockKeyhole className="w-3 h-3" /> : <LockKeyholeOpen className="w-3 h-3" />}
-          <span>{keyLocked ? "Key Locked" : "Public"}</span>
+          <Zap className="w-3 h-3" />
+          <span>{keyLocked ? "Pro Only" : "Public"}</span>
         </button>
       </div>
       <div className="flex gap-2">
@@ -562,80 +553,6 @@ function EditCardForm({ card, onSave, onCancel }: { card: AdminCardListResponse[
   );
 }
 
-function AdminKeysSection() {
-  const queryClient = useQueryClient();
-  const { data: keys = [] } = useQuery<AuthKey[]>({ queryKey: ['/api/admin/keys'] });
-  const [newPin, setNewPin] = useState("");
-  const [newName, setNewName] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-
-  const addKey = async () => {
-    if (!newPin || newPin.length < 4 || !newName) return;
-    setIsAdding(true);
-    try {
-      await fetch('/api/admin/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: newPin, name: newName }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/keys'] });
-      setNewPin("");
-      setNewName("");
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const deleteKey = async (id: number) => {
-    await fetch(`/api/admin/keys/${id}`, { method: 'DELETE' });
-    queryClient.invalidateQueries({ queryKey: ['/api/admin/keys'] });
-  };
-
-  return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <div className="p-4 space-y-4">
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-3">
-          <h4 className="text-xs font-bold text-primary uppercase">Add New Key</h4>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground uppercase font-bold">Owner Name</label>
-              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. John Doe" className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground uppercase font-bold">PIN (4-6 digits)</label>
-              <Input value={newPin} onChange={e => setNewPin(e.target.value)} maxLength={6} placeholder="1234" className="h-8 text-xs font-mono" />
-            </div>
-          </div>
-          <Button onClick={addKey} disabled={isAdding || newPin.length < 4 || !newName} className="w-full h-8 text-xs">
-            <Plus className="w-3 h-3 mr-1" /> Add Authorized Key
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Active Keys</h4>
-          <div className="space-y-1.5">
-            {keys.map(k => (
-              <div key={k.id} className="bg-white/5 border border-white/10 rounded-lg p-2.5 flex items-center justify-between group">
-                <div>
-                  <p className="text-xs font-bold text-foreground">{k.name}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">PIN: •••• {k.pin.slice(-2)}</p>
-                </div>
-                <button onClick={() => deleteKey(k.id)} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-            {keys.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground/30 text-xs italic border border-dashed border-white/10 rounded-lg">
-                No custom keys configured yet.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AdminSecuritySection() {
   const [pins, setPins] = useState<string[]>(() => getCustomPinList());

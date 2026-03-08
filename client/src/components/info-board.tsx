@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, LockKeyhole, Zap } from "lucide-react";
+import { Shield, Link, FileText, ExternalLink, BarChart2, RefreshCw, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AdminCardListResponse } from "@shared/routes";
 import { useAuth } from "@/hooks/use-auth";
@@ -158,7 +158,7 @@ export function InfoBoard() {
           onClick={() => setLocation("/?tab=notes")}
           className="w-full flex items-center gap-2 px-3 py-2.5 text-left rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
         >
-          <LockKeyhole className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+          <Zap className="w-3.5 h-3.5 text-primary/70 shrink-0" />
           <div>
             <p className="text-xs font-semibold text-primary/80">Some cards require Dispatch Pro</p>
             <p className="text-[10px] text-muted-foreground/50">Subscribe to unlock all info board cards</p>
@@ -181,7 +181,7 @@ export function InfoBoard() {
               {typeIcon}
               <span>{card.title}</span>
               <div className="ml-auto flex items-center gap-1 shrink-0">
-                {card.keyLocked && <LockKeyhole className="w-3 h-3 opacity-40" />}
+                {card.keyLocked && <span className="text-[9px] text-primary/60 font-bold">PRO</span>}
                 {card.pinned && <span className="text-[9px] opacity-40">PINNED</span>}
               </div>
             </div>
