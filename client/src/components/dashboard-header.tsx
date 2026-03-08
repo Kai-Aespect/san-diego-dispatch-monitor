@@ -91,7 +91,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
         preload="none"
       />
 
-      <header className="sticky top-0 z-50 w-full px-4 py-3 sm:px-6 bg-background/80 backdrop-blur-xl border-b border-border">
+      <header className="shrink-0 z-50 w-full px-4 py-3 sm:px-6 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="flex items-center gap-2">
