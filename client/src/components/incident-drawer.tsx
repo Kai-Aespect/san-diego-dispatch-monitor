@@ -75,8 +75,6 @@ export function IncidentDrawer({ incident, isOpen, onOpenChange }: IncidentDrawe
     if (incident) {
       setNotes(incident.notes || "");
       setTags(incident.tags || []);
-      setPin("");
-      setPinError("");
     }
   }, [incident?.id]);
 
