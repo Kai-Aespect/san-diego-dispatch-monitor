@@ -8,6 +8,7 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import { IncidentDrawer } from "@/components/incident-drawer";
 import { SidePanel, type PanelTab } from "@/components/side-panel";
 import { AudioNotifier } from "@/components/audio-notifier";
+import { AdBanner } from "@/components/ad-banner";
 import { formatDistanceToNow, differenceInMinutes } from "date-fns";
 import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff, Menu } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -460,15 +461,29 @@ function CallListContent({
             )}
           </div>
         ) : (
-          filteredIncidents.map(incident => (
-            <IncidentCard
-              key={incident.id}
-              incident={incident}
-              isSelected={selectedIncidentId === incident.id}
-              onClick={() => handleIncidentClick(incident)}
-              onUnitClick={handleUnitClick}
-            />
-          ))
+          <>
+            {filteredIncidents.slice(0, 5).map(incident => (
+              <IncidentCard
+                key={incident.id}
+                incident={incident}
+                isSelected={selectedIncidentId === incident.id}
+                onClick={() => handleIncidentClick(incident)}
+                onUnitClick={handleUnitClick}
+              />
+            ))}
+            {filteredIncidents.length > 5 && (
+              <AdBanner slot="4134073591" format="horizontal" className="my-1" />
+            )}
+            {filteredIncidents.slice(5).map(incident => (
+              <IncidentCard
+                key={incident.id}
+                incident={incident}
+                isSelected={selectedIncidentId === incident.id}
+                onClick={() => handleIncidentClick(incident)}
+                onUnitClick={handleUnitClick}
+              />
+            ))}
+          </>
         )}
       </div>
     </>
