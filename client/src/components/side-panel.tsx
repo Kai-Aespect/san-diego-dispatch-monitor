@@ -104,7 +104,7 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
         {activeTab === "reference" && <ReferencePanel />}
         {activeTab === "admin"     && <AdminPanel incidents={incidents} />}
         {activeTab === "settings"  && (
-          <div className="overflow-y-auto custom-scrollbar flex-1">
+          <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0">
             <SettingsPanel />
           </div>
         )}
