@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { type IncidentListResponse } from "@shared/routes";
-import { Bookmark, StickyNote, Shield, Settings, Lock, Radio, BookOpen, BarChart2 } from "lucide-react";
+import { Bookmark, StickyNote, Shield, Settings, Lock, Radio, BookOpen, BarChart2, Crown, Check } from "lucide-react";
 import { BookmarksPanel } from "./bookmarks-panel";
 import { PersonalNotes } from "./personal-notes";
 import { InfoBoard } from "./info-board";
@@ -15,7 +15,7 @@ import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
-export type PanelTab = "bookmarks" | "notes" | "units" | "analytics" | "info" | "reference" | "admin" | "settings";
+export type PanelTab = "bookmarks" | "notes" | "units" | "analytics" | "info" | "reference" | "admin" | "settings" | "subscribe";
 
 interface SidePanelProps {
   incidents: IncidentListResponse;
@@ -23,6 +23,40 @@ interface SidePanelProps {
   activeTab?: PanelTab;
   setActiveTab?: (t: PanelTab) => void;
   focusUnitId?: string | null;
+}
+
+function ProActivePanel() {
+  return (
+    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-4 space-y-4">
+      <div className="text-center py-2">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 mb-3">
+          <Crown className="w-6 h-6 text-primary" />
+        </div>
+        <h2 className="text-lg font-bold text-foreground">Dispatch Pro</h2>
+        <p className="text-sm text-muted-foreground mt-1">Your subscription is active.</p>
+      </div>
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pro features unlocked</p>
+        {[
+          "Track & bookmark incidents",
+          "Personal Notes tab",
+          "Units roster panel",
+          "Full stats & analytics",
+          "Faster 30-second refresh",
+          "Locked info board cards",
+          "Listen Live audio stream",
+        ].map(f => (
+          <div key={f} className="flex items-center gap-2 text-xs text-foreground/80">
+            <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+            {f}
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground/50 text-center">
+        Manage your subscription via the link in your confirmation email.
+      </p>
+    </div>
+  );
 }
 
 export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTab, setActiveTab: setControlledTab, focusUnitId }: SidePanelProps) {
@@ -44,15 +78,17 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
     testId: string;
     badge?: number;
     proOnly?: boolean;
+    isProTab?: boolean;
   }> = [
-    { id: "bookmarks", icon: <Bookmark className="w-4 h-4" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length, proOnly: true },
-    { id: "notes",     icon: <StickyNote className="w-4 h-4" />, label: "Notes",   testId: "tab-notes",      proOnly: true },
-    { id: "units",     icon: <Radio className="w-4 h-4" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount, proOnly: true },
-    { id: "analytics", icon: <BarChart2 className="w-4 h-4" />,  label: "Stats",   testId: "tab-analytics",  proOnly: true },
-    { id: "info",      icon: <Shield className="w-4 h-4" />,     label: "Info",    testId: "tab-info" },
-    { id: "reference", icon: <BookOpen className="w-4 h-4" />,   label: "Ref",     testId: "tab-reference" },
-    { id: "admin",     icon: <Lock className="w-4 h-4" />,       label: "Admin",   testId: "tab-admin" },
-    { id: "settings",  icon: <Settings className="w-4 h-4" />,   label: "Set",     testId: "tab-settings" },
+    { id: "bookmarks", icon: <Bookmark className="w-5 h-5" />,   label: "Track",   testId: "tab-bookmarks",  badge: bookmarkedIds.length, proOnly: true },
+    { id: "notes",     icon: <StickyNote className="w-5 h-5" />, label: "Notes",   testId: "tab-notes",      proOnly: true },
+    { id: "units",     icon: <Radio className="w-5 h-5" />,      label: "Units",   testId: "tab-units",      badge: activeUnitCount, proOnly: true },
+    { id: "analytics", icon: <BarChart2 className="w-5 h-5" />,  label: "Stats",   testId: "tab-analytics",  proOnly: true },
+    { id: "info",      icon: <Shield className="w-5 h-5" />,     label: "Info",    testId: "tab-info" },
+    { id: "reference", icon: <BookOpen className="w-5 h-5" />,   label: "Ref",     testId: "tab-reference" },
+    { id: "admin",     icon: <Lock className="w-5 h-5" />,       label: "Admin",   testId: "tab-admin" },
+    { id: "settings",  icon: <Settings className="w-5 h-5" />,   label: "Set",     testId: "tab-settings" },
+    { id: "subscribe", icon: <Crown className="w-5 h-5" />,      label: isSubscribed ? "Pro ✓" : "Get Pro", testId: "tab-subscribe", isProTab: true },
   ];
 
   return (
@@ -108,14 +144,20 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
             <SettingsPanel />
           </div>
         )}
+        {activeTab === "subscribe" && (
+          isSubscribed
+            ? <ProActivePanel />
+            : <SubscribeWall />
+        )}
       </div>
 
       {/* ── Vertical nav — RIGHT side ── */}
-      <nav className="flex flex-col shrink-0 w-[58px] border-l border-border bg-background/70 py-2 gap-0.5 overflow-y-auto">
+      <nav className="flex flex-col shrink-0 w-[76px] border-l border-border bg-background/70 py-2 gap-1 overflow-y-auto">
         {TABS.map(tab => {
           const active = activeTab === tab.id;
           const adminActive = tab.id === "admin" && isAdmin;
           const needsPro = tab.proOnly && !isSubscribed;
+          const isProTab = tab.isProTab;
           return (
             <button
               key={tab.id}
@@ -123,11 +165,15 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
               title={tab.label}
               data-testid={tab.testId}
               className={cn(
-                "relative mx-1.5 flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg",
+                "relative mx-1.5 flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl",
                 "text-[10px] font-medium leading-none",
                 "transition-all duration-150",
                 active
                   ? "bg-primary/15 text-primary"
+                  : isProTab && !isSubscribed
+                  ? "text-amber-400/80 hover:bg-amber-400/10 hover:text-amber-400"
+                  : isProTab && isSubscribed
+                  ? "text-primary/70 hover:bg-primary/10 hover:text-primary"
                   : adminActive
                   ? "text-emerald-400 hover:bg-white/5"
                   : needsPro
@@ -143,17 +189,21 @@ export function SidePanel({ incidents, onSelectIncident, activeTab: controlledTa
               <span className="w-full text-center px-0.5 truncate">{tab.label}</span>
 
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-primary-foreground text-[8px] font-bold flex items-center justify-center leading-none">
+                <span className="absolute top-1.5 right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-primary-foreground text-[8px] font-bold flex items-center justify-center leading-none">
                   {tab.badge > 99 ? "99" : tab.badge}
                 </span>
               )}
 
               {adminActive && !active && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-background" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-background" />
               )}
 
               {needsPro && !active && (
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-primary/40" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary/40" />
+              )}
+
+              {isProTab && !isSubscribed && !active && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               )}
             </button>
           );

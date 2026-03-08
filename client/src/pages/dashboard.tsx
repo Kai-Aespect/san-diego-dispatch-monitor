@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { useIncidents, useStatus } from "@/hooks/use-incidents";
+import { useIncidents } from "@/hooks/use-incidents";
 import { useSettings } from "@/hooks/use-settings";
 import { useAuth } from "@/hooks/use-auth";
 import { IncidentCard } from "@/components/incident-card";
@@ -9,7 +9,7 @@ import { IncidentDrawer } from "@/components/incident-drawer";
 import { SidePanel, type PanelTab } from "@/components/side-panel";
 import { AudioNotifier } from "@/components/audio-notifier";
 import { AdPopup } from "@/components/ad-popup";
-import { formatDistanceToNow, differenceInMinutes } from "date-fns";
+import { differenceInMinutes } from "date-fns";
 import { AlertTriangle, Map as MapIcon, List, CheckCheck, History, Activity, ShieldOff, Menu } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,6 @@ export default function Dashboard() {
   const { settings } = useSettings();
   const refetchInterval = settings.fastRefresh && isSubscribed ? 30000 : 60000;
   const { data: incidents = [], isLoading } = useIncidents(refetchInterval);
-  const { data: status } = useStatus();
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
@@ -229,13 +228,6 @@ export default function Dashboard() {
       <AudioNotifier incidents={incidents} enabled={settings.volumeEnabled} />
       <AdPopup />
       <DashboardHeader search={search} setSearch={setSearch} incidents={incidents} />
-
-      {status?.isStale && (
-        <div className="bg-destructive/90 text-destructive-foreground px-4 py-2 text-sm font-medium flex items-center justify-center shadow-lg z-[60] shrink-0">
-          <AlertTriangle className="w-4 h-4 mr-2 animate-bounce" />
-          Data may be stale. Last updated {formatDistanceToNow(new Date(status.lastUpdated))} ago.
-        </div>
-      )}
 
       {/* ── DESKTOP layout (lg+): three resizable panels ── */}
       <main className="hidden lg:flex flex-1 overflow-hidden min-h-0">
