@@ -13,9 +13,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 
 const PRICE_IDS = {
-  weekly:  "price_1T8ZjHPyfpGf4shhpcGz6s1H",
-  monthly: "price_1T8ZjHPyfpGf4shhGTmaXsz8",
-  yearly:  "price_1T8ZjHPyfpGf4shhVfcW4oxT",
+  weekly:  "price_1T8aILPyfpGf4shhVcnGZVt5",
+  monthly: "price_1T8aIOPyfpGf4shhU7ehbu0f",
+  yearly:  "price_1T8aIRPyfpGf4shhMIPR2mjf",
 };
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {

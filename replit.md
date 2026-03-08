@@ -22,9 +22,9 @@ Key capabilities:
 - All visitors must create an account to access the dashboard
 - Free accounts get: incident list, map, bookmarks, info board (non-locked), reference
 - Dispatch Pro subscribers get: Personal Notes, call/unit note editing, Units panel, Stats panel, fast refresh, locked info board cards
-- Pricing: Weekly $1.49, Monthly $4.99, Yearly $49 (Stripe)
-- Stripe product ID: `prod_U6kOFOZBFHCphe`
-- Stripe price IDs: weekly `price_1T8WtePyfpGf4shhI7P9UJTq`, monthly `price_1T8WthPyfpGf4shh0EoW3INa`, yearly `price_1T8WtjPyfpGf4shhkt651jp6`
+- Pricing: Weekly $1.83, Monthly $5.43, Yearly $50.72 (includes Stripe processing fees)
+- Stripe product ID: `prod_U6nupKx4N2doJv` (Dispatch Pro)
+- Stripe price IDs: weekly `price_1T8aILPyfpGf4shhVcnGZVt5`, monthly `price_1T8aIOPyfpGf4shhU7ehbu0f`, yearly `price_1T8aIRPyfpGf4shhMIPR2mjf`
 - Admin PIN: 3232 (for /admin panel only)
 
 ---
