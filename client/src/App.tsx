@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Dashboard from "./pages/dashboard";
 import Login from "./pages/login";
 import Register from "./pages/register";
+import Subscribe from "./pages/subscribe";
 import SubscribeSuccess from "./pages/subscribe-success";
 import SubscribeCancel from "./pages/subscribe-cancel";
 import Billing from "./pages/billing";
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/" component={() => <AuthGuard component={Dashboard} />} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/subscribe" component={() => <AuthGuard component={Subscribe} />} />
       <Route path="/subscribe/success" component={SubscribeSuccess} />
       <Route path="/subscribe/cancel" component={SubscribeCancel} />
       <Route path="/billing" component={() => <AuthGuard component={Billing} />} />
