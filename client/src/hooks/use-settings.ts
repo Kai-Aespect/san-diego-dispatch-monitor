@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 
 export type Theme = "dark" | "light";
+export type AckMode = "new" | "updates" | "both";
 
 interface Settings {
   theme: Theme;
   volumeEnabled: boolean;
   fastRefresh: boolean;
+  ackMode: AckMode;
 }
 
 const STORAGE_KEY = "sd_dispatch_settings";
@@ -13,9 +15,9 @@ const STORAGE_KEY = "sd_dispatch_settings";
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { theme: "dark", volumeEnabled: false, fastRefresh: false, ...JSON.parse(raw) };
+    if (raw) return { theme: "dark", volumeEnabled: false, fastRefresh: false, ackMode: "new", ...JSON.parse(raw) };
   } catch {}
-  return { theme: "dark", volumeEnabled: false, fastRefresh: false };
+  return { theme: "dark", volumeEnabled: false, fastRefresh: false, ackMode: "new" };
 }
 
 function saveSettings(s: Settings) {
@@ -69,5 +71,9 @@ export function useSettings() {
     broadcast({ ...globalSettings, fastRefresh });
   }, []);
 
-  return { settings, setTheme, setVolumeEnabled, setFastRefresh };
+  const setAckMode = useCallback((ackMode: AckMode) => {
+    broadcast({ ...globalSettings, ackMode });
+  }, []);
+
+  return { settings, setTheme, setVolumeEnabled, setFastRefresh, setAckMode };
 }

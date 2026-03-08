@@ -39,18 +39,21 @@ export async function geocodeAddress(address: string, city = "San Diego, CA"): P
   }
 }
 
+const MAX_GEOCODE_PER_CYCLE = 30;
+
 export async function geocodePendingIncidents(storage: any) {
   const all = await storage.getIncidents();
-  const pending = all.filter((i: any) => i.lat == null || i.lng == null);
+  const pending = all
+    .filter((i: any) => i.active && (i.lat == null || i.lng == null) && i.location && i.location !== "Unknown")
+    .slice(0, MAX_GEOCODE_PER_CYCLE);
+
   if (pending.length === 0) return;
 
-  console.log(`Geocoding ${pending.length} incidents without coordinates...`);
+  console.log(`Geocoding ${pending.length} active incidents without coordinates...`);
   for (const incident of pending) {
-    if (!incident.location || incident.location === "Unknown") continue;
     const coords = await geocodeAddress(incident.location);
     if (coords) {
       await storage.updateIncident(incident.id, { lat: coords.lat, lng: coords.lng });
-      console.log(`Geocoded: ${incident.location} -> ${coords.lat}, ${coords.lng}`);
     }
   }
   console.log("Geocoding pass complete.");

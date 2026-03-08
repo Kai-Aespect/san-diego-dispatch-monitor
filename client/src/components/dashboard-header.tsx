@@ -3,10 +3,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Search, Radio, RefreshCcw, Clock as ClockIcon,
-  Volume2, VolumeX, X, ExternalLink, Play, Pause, Loader2
+  Volume2, VolumeX, X, ExternalLink, Play, Pause, Loader2, Lock
 } from "lucide-react";
 import { useSyncIncidents } from "@/hooks/use-incidents";
 import { useSettings } from "@/hooks/use-settings";
+import { useAuth } from "@/hooks/use-auth";
 import { type IncidentListResponse } from "@shared/routes";
 
 // Broadcastify CDN stream URL for feed 20530 (SD Fire & Police)
@@ -29,6 +30,7 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
   const [playerState, setPlayerState] = useState<PlayerState>("idle");
   const audioRef = useRef<HTMLAudioElement>(null);
   const { settings, setVolumeEnabled } = useSettings();
+  const { isSubscribed } = useAuth();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -97,8 +99,8 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
                 <Radio className="w-5 h-5 text-white" />
               </div>
               <div className="flex flex-col">
-                <h1 className="font-display font-bold text-lg tracking-tight hidden sm:block text-foreground leading-none">
-                  SD Dispatch<span className="text-primary">.Live</span>
+                <h1 className="font-display font-bold text-base tracking-tight hidden sm:block text-foreground leading-none">
+                  San Diego<span className="text-primary"> Dispatch Monitor</span>
                 </h1>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground mt-1">
                   <ClockIcon className="w-3 h-3 text-primary" />
@@ -146,15 +148,29 @@ export function DashboardHeader({ search, setSearch, incidents }: DashboardHeade
               {syncMutation.isPending ? 'Syncing...' : 'Sync'}
             </Button>
 
-            <Button
-              onClick={togglePlayer}
-              size="sm"
-              className={`bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white shadow-lg shadow-red-500/20 border-0 transition-all ${playerOpen ? 'ring-2 ring-orange-400/60' : ''}`}
-              data-testid="button-listen-live"
-            >
-              <Radio className={`w-4 h-4 mr-2 ${playerState === 'playing' ? 'animate-pulse' : ''}`} />
-              {playerOpen ? 'Stop Audio' : 'Listen Live'}
-            </Button>
+            {isSubscribed ? (
+              <Button
+                onClick={togglePlayer}
+                size="sm"
+                className={`bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white shadow-lg shadow-red-500/20 border-0 transition-all ${playerOpen ? 'ring-2 ring-orange-400/60' : ''}`}
+                data-testid="button-listen-live"
+              >
+                <Radio className={`w-4 h-4 mr-2 ${playerState === 'playing' ? 'animate-pulse' : ''}`} />
+                {playerOpen ? 'Stop Audio' : 'Listen Live'}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => window.location.href = '/subscribe'}
+                size="sm"
+                variant="outline"
+                className="border-orange-500/30 text-orange-400/70 hover:bg-orange-500/10 transition-all"
+                data-testid="button-listen-live-locked"
+                title="Listen Live requires Dispatch Pro"
+              >
+                <Lock className="w-3.5 h-3.5 mr-1.5" />
+                Listen Live
+              </Button>
+            )}
           </div>
         </div>
 

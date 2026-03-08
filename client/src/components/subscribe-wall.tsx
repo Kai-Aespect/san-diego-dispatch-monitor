@@ -1,28 +1,34 @@
 import { useState } from "react";
-import { Zap, Check, ExternalLink } from "lucide-react";
+import { Zap, Check, ExternalLink, Radio } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 const PLANS = [
   {
     label: "Weekly",
     price: "$1.49",
+    fee: "+$0.34 processing fee",
+    total: "$1.83/wk",
     period: "per week",
-    priceId: "price_1T8WtePyfpGf4shhI7P9UJTq",
+    priceId: "price_1T8ZjHPyfpGf4shhpcGz6s1H",
     highlight: false,
   },
   {
     label: "Monthly",
     price: "$4.99",
+    fee: "+$0.44 processing fee",
+    total: "$5.43/mo",
     period: "per month",
-    priceId: "price_1T8WthPyfpGf4shh0EoW3INa",
+    priceId: "price_1T8ZjHPyfpGf4shhGTmaXsz8",
     highlight: true,
     badge: "Most Popular",
   },
   {
     label: "Yearly",
     price: "$49",
+    fee: "+$1.72 processing fee",
+    total: "$50.72/yr",
     period: "per year",
-    priceId: "price_1T8WtjPyfpGf4shhkt651jp6",
+    priceId: "price_1T8ZjHPyfpGf4shhVfcW4oxT",
     highlight: false,
     badge: "Best Value",
   },
@@ -35,6 +41,7 @@ const FEATURES = [
   "Full stats & analytics",
   "Faster 30-second refresh",
   "Locked info board cards",
+  "Listen Live audio stream",
 ];
 
 interface SubscribeWallProps {
@@ -126,7 +133,10 @@ export function SubscribeWall({ feature, compact }: SubscribeWallProps) {
                 <p className="text-[10px] text-muted-foreground">{plan.period}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-foreground">{plan.price}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-foreground">{plan.price}</span>
+                  <p className="text-[9px] text-muted-foreground/60 leading-tight">{plan.fee}</p>
+                </div>
                 <button
                   onClick={() => handleSubscribe(plan.priceId)}
                   disabled={loading !== null}

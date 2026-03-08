@@ -1,14 +1,35 @@
-import { useSettings, type Theme } from "@/hooks/use-settings";
+import { useSettings, type Theme, type AckMode } from "@/hooks/use-settings";
 import { useAuth } from "@/hooks/use-auth";
-import { Sun, Moon, Volume2, VolumeX, Palette, Bell, Zap, Timer, CreditCard, LogOut } from "lucide-react";
+import { Sun, Moon, Volume2, VolumeX, Palette, Bell, Zap, Timer, CreditCard, LogOut, BellRing, BellDot } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useState } from "react";
 
 export function SettingsPanel() {
-  const { settings, setTheme, setVolumeEnabled, setFastRefresh } = useSettings();
+  const { settings, setTheme, setVolumeEnabled, setFastRefresh, setAckMode } = useSettings();
   const { user, isSubscribed, logout } = useAuth();
-  const [, setLocation] = useLocation();
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/stripe/portal", {});
+      if (!res.ok) throw new Error("Portal unavailable");
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+    } catch {
+      alert("Unable to open billing portal. Please try again.");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const ackOptions: { value: AckMode; label: string; desc: string }[] = [
+    { value: "new", label: "New calls only", desc: "Only alert for brand-new incidents" },
+    { value: "updates", label: "Updates only", desc: "Only alert for changes to existing calls" },
+    { value: "both", label: "New & updates", desc: "Alert for both new and updated calls" },
+  ];
 
   return (
     <div className="p-4 space-y-6">
@@ -53,7 +74,7 @@ export function SettingsPanel() {
             <div>
               <Label className="text-sm font-semibold text-foreground">Alert Tones</Label>
               <p className="text-xs text-muted-foreground">
-                {settings.volumeEnabled ? "3-tone beep on new/updated calls" : "Alerts muted"}
+                {settings.volumeEnabled ? "3-tone beep on qualifying calls" : "Alerts muted"}
               </p>
             </div>
           </div>
@@ -63,11 +84,30 @@ export function SettingsPanel() {
             data-testid="switch-volume"
           />
         </div>
-        {settings.volumeEnabled && (
-          <p className="text-[10px] text-muted-foreground/60 mt-2 px-1">
-            Plays only when a new call is added or an existing call's units, type, or status changes.
-          </p>
-        )}
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+          <BellDot className="w-3.5 h-3.5" /> Acknowledgment
+        </h3>
+        <p className="text-[10px] text-muted-foreground/60 mb-3 px-1">Choose which calls show the unread badge and trigger audio alerts.</p>
+        <div className="space-y-2">
+          {ackOptions.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setAckMode(opt.value)}
+              className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                settings.ackMode === opt.value
+                  ? "border-primary/40 bg-primary/8 text-foreground"
+                  : "border-white/10 bg-accent/20 text-muted-foreground hover:border-white/20"
+              }`}
+              data-testid={`ack-mode-${opt.value}`}
+            >
+              <p className="font-semibold">{opt.label}</p>
+              <p className="text-[10px] opacity-70 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
@@ -118,11 +158,13 @@ export function SettingsPanel() {
           </div>
           {isSubscribed && (
             <button
-              onClick={() => setLocation("/billing")}
+              onClick={openPortal}
+              disabled={portalLoading}
               data-testid="button-manage-billing"
-              className="w-full mt-1 flex items-center justify-center gap-1.5 h-7 rounded-lg bg-white/5 border border-white/10 text-xs text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all"
+              className="w-full mt-1 flex items-center justify-center gap-1.5 h-7 rounded-lg bg-white/5 border border-white/10 text-xs text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all disabled:opacity-50"
             >
-              <CreditCard className="w-3.5 h-3.5" /> Manage Subscription
+              <CreditCard className="w-3.5 h-3.5" />
+              {portalLoading ? "Opening..." : "Manage Subscription"}
             </button>
           )}
           <button

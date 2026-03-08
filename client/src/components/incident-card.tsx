@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { getCallDescription } from "@/lib/call-descriptions";
+import { useSettings } from "@/hooks/use-settings";
 
 interface HistoryEntry {
   id: number;
@@ -62,6 +63,7 @@ const RESPONSE_LEVEL_COLORS: Record<string, string> = {
 
 export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: IncidentCardProps) {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
+  const { settings } = useSettings();
   const { isBookmarked, toggleBookmark } = useBookmarks();
 
   const { data: rawHistory = [] } = useQuery<HistoryEntry[]>({
@@ -80,8 +82,10 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
   const isMedical = incident.callTypeFamily === 'Medical';
   const isTraffic = incident.callTypeFamily === 'Traffic';
 
-  const isNew = !incident.acknowledged && !incident.hasHistory && differenceInMinutes(new Date(), new Date(incident.time)) < 30;
-  const isUpdated = !incident.acknowledged && incident.hasHistory;
+  const isNewIncident = !incident.acknowledged && !incident.hasHistory && differenceInMinutes(new Date(), new Date(incident.time)) < 30;
+  const hasUpdateFlag = !!incident.hasUpdate;
+  const isNew = (settings.ackMode === "new" || settings.ackMode === "both") && isNewIncident;
+  const isUpdated = (settings.ackMode === "updates" || settings.ackMode === "both") && hasUpdateFlag;
   const bookmarked = isBookmarked(incident.id);
   const responseLevel = extractResponseLevel(incident.callType);
   const description = getCallDescription(incident.callType, incident.callTypeFamily);
@@ -94,7 +98,7 @@ export function IncidentCard({ incident, isSelected, onClick, onUnitClick }: Inc
     e.stopPropagation();
     setIsAcknowledging(true);
     try {
-      await apiRequest("PATCH", `/api/incidents/${incident.id}`, { acknowledged: true });
+      await apiRequest("PATCH", `/api/incidents/${incident.id}`, { acknowledged: true, hasUpdate: false });
       queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
     } catch {}
     finally { setIsAcknowledging(false); }

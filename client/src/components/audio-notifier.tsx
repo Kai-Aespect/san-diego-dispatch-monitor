@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 import { type IncidentListResponse } from "@shared/routes";
+import { useSettings } from "@/hooks/use-settings";
 
 interface AudioNotifierProps {
   incidents: IncidentListResponse;
   enabled: boolean;
 }
 
-// Hash meaningful content fields — NOT lastUpdated (which changes every sync)
 function contentHash(i: IncidentListResponse[0]): string {
   return `${JSON.stringify(i.units)}|${i.callType}|${i.status}|${i.callTypeFamily}|${i.active}`;
 }
@@ -15,6 +15,7 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
   const knownIds = useRef<Set<number>>(new Set());
   const knownHashes = useRef<Map<number, string>>(new Map());
   const initialLoadDone = useRef(false);
+  const { settings } = useSettings();
 
   const playTripleTone = () => {
     if (!enabled) return;
@@ -51,7 +52,6 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
   useEffect(() => {
     if (!incidents.length) return;
 
-    // On first load, seed the known sets without playing
     if (!initialLoadDone.current) {
       incidents.forEach(i => {
         knownIds.current.add(i.id);
@@ -62,25 +62,25 @@ export function AudioNotifier({ incidents, enabled }: AudioNotifierProps) {
     }
 
     let shouldPlay = false;
+    const ackMode = settings.ackMode;
+
     incidents.forEach(i => {
       const hash = contentHash(i);
       if (!knownIds.current.has(i.id)) {
-        // Brand new incident
-        shouldPlay = true;
+        if (ackMode === "new" || ackMode === "both") shouldPlay = true;
         knownIds.current.add(i.id);
         knownHashes.current.set(i.id, hash);
       } else {
         const prev = knownHashes.current.get(i.id);
         if (prev !== undefined && prev !== hash) {
-          // Existing incident with meaningful content change
-          shouldPlay = true;
+          if (ackMode === "updates" || ackMode === "both") shouldPlay = true;
           knownHashes.current.set(i.id, hash);
         }
       }
     });
 
     if (shouldPlay) playTripleTone();
-  }, [incidents]);
+  }, [incidents, settings.ackMode]);
 
   return null;
 }

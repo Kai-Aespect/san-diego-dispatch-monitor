@@ -30,6 +30,7 @@ export const api = {
         notes: z.string().optional(),
         tags: z.array(z.string()).optional(),
         acknowledged: z.boolean().optional(),
+        hasUpdate: z.boolean().optional(),
         active: z.boolean().optional(),
       }),
       responses: {

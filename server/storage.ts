@@ -6,7 +6,7 @@ import {
   type DailyStat, type UnitNote, type AuthKey, type InsertAuthKey,
   type User, type UserNote,
 } from "@shared/schema";
-import { eq, desc, and, notInArray, inArray, sql, lt, asc, gte } from "drizzle-orm";
+import { eq, desc, and, or, notInArray, inArray, sql, lt, asc, gte } from "drizzle-orm";
 import { format, subDays } from "date-fns";
 
 const MAX_HISTORY_PER_INCIDENT = 200;
@@ -130,8 +130,8 @@ export class DatabaseStorage implements IStorage {
 
   async acknowledgeAll(): Promise<void> {
     await db.update(incidents)
-      .set({ acknowledged: true })
-      .where(eq(incidents.acknowledged, false));
+      .set({ acknowledged: true, hasUpdate: false })
+      .where(or(eq(incidents.acknowledged, false), eq(incidents.hasUpdate, true)));
   }
 
   async clearIncidents(ids: number[]): Promise<void> {
@@ -202,7 +202,8 @@ export class DatabaseStorage implements IStorage {
         lastUpdated: new Date(),
         notes: existing.notes,
         tags: existing.tags,
-        acknowledged: changes.length > 0 ? false : existing.acknowledged,
+        acknowledged: existing.acknowledged,
+        hasUpdate: changes.length > 0 ? true : existing.hasUpdate,
         lat: incident.lat ?? existing.lat,
         lng: incident.lng ?? existing.lng,
         active: true,
