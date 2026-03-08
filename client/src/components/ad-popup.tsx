@@ -38,7 +38,7 @@ export function AdPopup() {
     } catch (e) {}
   }, [visible]);
 
-  if (!visible || isLoading || isSubscribed) return null;
+  if (true || !visible || isLoading || isSubscribed) return null;
 
   return (
     <div
