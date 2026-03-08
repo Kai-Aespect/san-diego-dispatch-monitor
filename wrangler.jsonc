@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "san-diego-dispatch-monitor-worker",
+  "name": "san-diego-dispatch-monitor",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-03-08",
   "compatibility_flags": ["nodejs_compat"],
