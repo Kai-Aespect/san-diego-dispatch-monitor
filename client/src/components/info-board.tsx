@@ -152,7 +152,7 @@ export function InfoBoard() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
+    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 pt-3 space-y-3">
       {hasLockedCards && !isSubscribed && (
         <button
           onClick={() => setLocation("/?tab=notes")}

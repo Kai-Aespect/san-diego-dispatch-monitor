@@ -440,7 +440,7 @@ function CallListContent({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 pb-24 space-y-2.5 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-24 space-y-2.5 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         {filteredIncidents.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 p-8 text-center">
             <div className="w-14 h-14 rounded-full bg-accent/50 flex items-center justify-center">

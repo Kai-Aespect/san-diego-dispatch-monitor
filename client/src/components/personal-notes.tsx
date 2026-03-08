@@ -69,7 +69,7 @@ export function PersonalNotes() {
           </button>
         </div>
       </div>
-      <div className="flex-1 p-3 flex flex-col">
+      <div className="flex-1 min-h-0 p-3 flex flex-col">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />

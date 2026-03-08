@@ -532,7 +532,7 @@ export function AnalyticsPanel({ incidents }: AnalyticsPanelProps) {
       </div>
 
       {/* ── Scrolling content ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
         <div className="p-4 space-y-6">
 
           {/* ── Overview KPIs ── */}

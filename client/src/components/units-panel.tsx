@@ -278,7 +278,7 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-4">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</p>
               <p className="text-xs text-foreground/80 leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5 italic">
@@ -365,7 +365,7 @@ export function UnitsPanel({ incidents, onSelectIncident, focusUnitId }: UnitsPa
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 space-y-1">
         {filtered.length === 0 && (
           <div className="text-center py-8 text-muted-foreground/40 text-xs">No units found.</div>
         )}
